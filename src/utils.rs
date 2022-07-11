@@ -10,3 +10,7 @@ cfg_if! {
         pub fn set_panic_hook() {}
     }
 }
+
+pub trait Source {
+    fn get_key_values(&self) -> Vec<(String, String)>;
+}
