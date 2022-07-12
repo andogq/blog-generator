@@ -1,16 +1,27 @@
+use std::collections::HashMap;
+
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
 use worker::{console_log, Fetch, Request, RequestInit};
 
 use crate::utils::Source;
 
+static TARGET: &str = "https://api.github.com";
+
+fn request_init() -> RequestInit {
+    let mut init = RequestInit::new();
+    init.headers.set("user-agent", "rust").unwrap();
+
+    init
+}
+
 async fn request<T>(endpoint: &str) -> Option<T>
 where
     T: DeserializeOwned,
 {
-    let mut init = RequestInit::new();
-    init.headers.set("user-agent", "rust").unwrap();
+    let init = request_init();
 
-    let request = Fetch::Request(Request::new_with_init(endpoint, &init).unwrap());
+    let endpoint = format!("{}{}", TARGET, endpoint);
+    let request = Fetch::Request(Request::new_with_init(&endpoint, &init).unwrap());
 
     if let Ok(mut response) = request.send().await {
         console_log!("{} {}", endpoint, response.status_code());
@@ -29,7 +40,7 @@ pub struct User {
     #[serde(rename = "login")]
     username: String,
 
-    name: String,
+    pub name: String,
     bio: String,
 
     #[serde(rename = "avatar_url")]
@@ -46,7 +57,7 @@ pub struct User {
 
 impl User {
     pub async fn get(user: &str) -> Option<User> {
-        request::<User>(&format!("https://api.github.com/users/{}", user)).await
+        request::<User>(&format!("/users/{}", user)).await
     }
 }
 
@@ -71,8 +82,8 @@ impl Source for User {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Issue {
     #[serde(rename = "number")]
-    id: u32,
-    title: String,
+    pub id: u32,
+    pub title: String,
     pub body: String,
 
     #[serde(rename = "state", deserialize_with = "deserialize_archive")]
@@ -92,17 +103,74 @@ where
     Ok(v.eq("closed"))
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct File {
+    pub name: String,
+    path: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct FileContent {
+    content: String,
+    encoding: String,
+}
+
+impl File {
+    pub async fn get_contents(&self) -> Option<String> {
+        if let Some(file) = request::<FileContent>(&self.path).await {
+            if file.encoding == "base64" {
+                let encoded_content = file.content.replace('\n', "");
+
+                if let Ok(Ok(content)) = base64::decode(encoded_content).map(String::from_utf8) {
+                    Some(content)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
 pub struct Repo {
+    pub user: String,
     pub name: String,
 }
 
 impl Repo {
-    pub async fn get_issues(&self) -> Vec<Issue> {
-        request::<Vec<Issue>>(&format!(
-            "https://api.github.com/repos/{}/issues",
-            self.name
+    pub async fn get_issue(&self, issue_number: u32) -> Option<Issue> {
+        request::<Issue>(&format!(
+            "/repos/{}/{}/issues/{}",
+            self.user, self.name, issue_number
         ))
         .await
-        .unwrap_or_default()
+    }
+
+    pub async fn get_issues(&self) -> Vec<Issue> {
+        request::<Vec<Issue>>(&format!("/repos/{}/{}/issues", self.user, self.name))
+            .await
+            .unwrap_or_default()
+    }
+
+    pub async fn get_files(&self, path: &str) -> HashMap<String, File> {
+        let path = format!("/repos/{}/{}/contents{}", self.user, self.name, path);
+
+        request::<Vec<File>>(&path)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|file| {
+                (
+                    file.name.clone(),
+                    File {
+                        path: format!("{}/{}", path, file.name),
+                        ..file
+                    },
+                )
+            })
+            .collect()
     }
 }
