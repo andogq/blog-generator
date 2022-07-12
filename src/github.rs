@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::path::PathBuf;
 
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
 use worker::{console_log, Fetch, Request, RequestInit};
@@ -38,21 +38,21 @@ where
 #[derive(Serialize, Deserialize, Debug)]
 pub struct User {
     #[serde(rename = "login")]
-    username: String,
+    pub username: String,
 
     pub name: String,
-    bio: String,
+    pub bio: String,
 
     #[serde(rename = "avatar_url")]
-    profile_picture: String,
+    pub profile_picture: String,
 
-    location: String,
+    pub location: String,
 
     #[serde(rename = "twitter_username")]
-    twitter: String,
+    pub twitter: String,
 
-    hireable: bool,
-    company: String,
+    pub hireable: bool,
+    pub company: String,
 }
 
 impl User {
@@ -87,10 +87,10 @@ pub struct Issue {
     pub body: String,
 
     #[serde(rename = "state", deserialize_with = "deserialize_archive")]
-    archived: bool,
+    pub archived: bool,
 
-    created_at: String,
-    updated_at: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 fn deserialize_archive<'de, D>(deserialize: D) -> Result<bool, D::Error>
@@ -106,7 +106,7 @@ where
 #[derive(Serialize, Deserialize, Debug)]
 pub struct File {
     pub name: String,
-    path: String,
+    pub path: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -116,6 +116,18 @@ struct FileContent {
 }
 
 impl File {
+    pub fn new(path: &str) -> File {
+        File {
+            name: PathBuf::from(path)
+                .file_name()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default()
+                .to_string(),
+            path: path.to_string(),
+        }
+    }
+
     pub async fn get_contents(&self) -> Option<String> {
         if let Some(file) = request::<FileContent>(&self.path).await {
             if file.encoding == "base64" {
@@ -155,22 +167,7 @@ impl Repo {
             .unwrap_or_default()
     }
 
-    pub async fn get_files(&self, path: &str) -> HashMap<String, File> {
-        let path = format!("/repos/{}/{}/contents{}", self.user, self.name, path);
-
-        request::<Vec<File>>(&path)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .map(|file| {
-                (
-                    file.name.clone(),
-                    File {
-                        path: format!("{}/{}", path, file.name),
-                        ..file
-                    },
-                )
-            })
-            .collect()
+    pub fn get_contents_path(&self, path: &str) -> String {
+        format!("/repos/{}/{}/contents{}", self.user, self.name, path)
     }
 }

@@ -1,12 +1,40 @@
-use github::Repo;
+use github::{File, Repo};
 use pulldown_cmark::{Options, Parser};
 use utils::replace;
 use worker::*;
 
-use crate::utils::Source;
-
 mod github;
 mod utils;
+
+async fn generate_page(
+    repo: &Repo,
+    page: &str,
+    title: &str,
+    content: Vec<(&str, &str)>,
+) -> Option<String> {
+    // Download template and core template from github
+    // TODO Could make these in parallel
+    if let (Some(mut core_template), Some(mut page_template)) = (
+        File::new(&repo.get_contents_path("/templates/core.html"))
+            .get_contents()
+            .await,
+        File::new(&repo.get_contents_path(&format!("/templates/{}.html", page)))
+            .get_contents()
+            .await,
+    ) {
+        // Fill content
+        for (key, value) in content.iter() {
+            page_template = replace(page_template, key, value);
+        }
+
+        core_template = replace(core_template, "content", &page_template);
+        core_template = replace(core_template, "title", title);
+
+        Some(core_template)
+    } else {
+        None
+    }
+}
 
 fn log_request(req: &Request) {
     console_log!(
@@ -32,41 +60,24 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                     name: "blog".to_string(),
                 };
 
-                let templates = repo.get_files("/templates").await;
+                let issues = repo.get_issues().await;
+                let posts = issues
+                    .iter()
+                    .map(|post| {
+                        format!("<li><a href=\"/posts/{}\">{}</a></li>", post.id, post.title)
+                    })
+                    .collect::<String>();
 
-                if let Some(template) = templates.get("home.html") {
-                    if let Some(mut content) = template.get_contents().await {
-                        for (key, value) in user.get_key_values() {
-                            content = replace(&content, &key, &value);
-                        }
+                let content: Vec<(&str, &str)> = vec![
+                    ("name", &user.name),
+                    ("profile_picture", &user.profile_picture),
+                    ("bio", &user.bio),
+                    ("hireable", if user.hireable { "yes" } else { "no" }),
+                    ("posts", &posts),
+                ];
 
-                        let issues = repo.get_issues().await;
-                        let posts = issues
-                            .iter()
-                            .map(|post| {
-                                format!(
-                                    "<li><a href=\"/posts/{}\">{}</a></li>",
-                                    post.id, post.title
-                                )
-                            })
-                            .collect::<String>();
-
-                        content = content.replace("{{posts}}", &posts);
-
-                        if let Some(page_template) = templates.get("core.html") {
-                            if let Some(mut page) = page_template.get_contents().await {
-                                page = page.replace("{{content}}", &content);
-                                page = page.replace("{{title}}", &user.name);
-                                Response::from_html(page)
-                            } else {
-                                Response::error("Internal error", 500)
-                            }
-                        } else {
-                            Response::error("Internal error", 500)
-                        }
-                    } else {
-                        Response::error("Internal error", 500)
-                    }
+                if let Some(page) = generate_page(&repo, "home", &user.name, content).await {
+                    Response::from_html(page)
                 } else {
                     Response::error("Internal error", 500)
                 }
@@ -91,7 +102,14 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                     let mut rendered = String::new();
                     pulldown_cmark::html::push_html(&mut rendered, parser);
 
-                    Response::from_html(rendered)
+                    let content: Vec<(&str, &str)> =
+                        vec![("post_title", &issue.title), ("post_body", &rendered)];
+
+                    if let Some(page) = generate_page(&repo, "post", &issue.title, content).await {
+                        Response::from_html(page)
+                    } else {
+                        Response::error("Internal error", 500)
+                    }
                 } else {
                     Response::error("Not found", 404)
                 }

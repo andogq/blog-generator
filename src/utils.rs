@@ -11,7 +11,7 @@ cfg_if! {
     }
 }
 
-pub fn replace(template: &str, key: &str, value: &str) -> String {
+pub fn replace(template: String, key: &str, value: &str) -> String {
     template.replace(&format!("{{{{{}}}}}", key), value)
 }
 
