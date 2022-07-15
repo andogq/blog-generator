@@ -41,6 +41,19 @@ async fn generate_page(
     None
 }
 
+fn render_markdown(markdown: &str) -> String {
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    let parser = Parser::new_ext(markdown, options);
+
+    let mut rendered = String::new();
+    pulldown_cmark::html::push_html(&mut rendered, parser);
+
+    rendered
+}
+
 fn log_request(req: &Request) {
     console_log!(
         "{} - [{}], located at: {:?}, within: {}",
@@ -60,18 +73,22 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     Router::new()
         .get_async("/", |_, RouteContext { env, .. }| async move {
             if let Some(user) = github::User::get("andogq").await {
-                if let Some(repo) = user.get_repo("blog".to_string()).await {
-                    let issues = repo.get_issues().await;
+                if let Some(repo) = user.get_repo("andogq".to_string()).await {
+                    let gh_key = &env.secret("gh_key").unwrap().to_string();
+                    let readme = File::new(&repo.get_contents_path("/README.md"));
 
-                    let pinned_repositories = user
-                        .get_pinned(&env.secret("gh_key").unwrap().to_string())
-                        .await;
+                    let (issues, pinned_repositories, readme) = futures::join!(
+                        repo.get_issues(),
+                        user.get_pinned(gh_key),
+                        readme.get_contents()
+                    );
 
                     let content = json!({
                         "name": user.name,
                         "profile_picture": user.profile_picture,
                         "bio": user.bio,
                         "hireable": if user.hireable { "yes" } else { "no" },
+                        "body": readme.map(|readme| render_markdown(&readme)),
                         "posts": issues.iter().map(|post| json!({
                             "link": format!("/posts/{}", post.id),
                             "title": post.title
@@ -94,16 +111,9 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         .get_async("/posts/:id", |_, ctx| async move {
             if let Ok(id) = ctx.param("id").unwrap().parse::<u32>() {
                 if let Some(user) = github::User::get("andogq").await {
-                    if let Some(repo) = user.get_repo("blog".to_string()).await {
+                    if let Some(repo) = user.get_repo("andogq".to_string()).await {
                         if let Some(issue) = repo.get_issue(id).await {
-                            let mut options = Options::empty();
-                            options.insert(Options::ENABLE_TABLES);
-                            options.insert(Options::ENABLE_TASKLISTS);
-                            options.insert(Options::ENABLE_STRIKETHROUGH);
-                            let parser = Parser::new_ext(&issue.body, options);
-
-                            let mut rendered = String::new();
-                            pulldown_cmark::html::push_html(&mut rendered, parser);
+                            let rendered = render_markdown(&issue.body);
 
                             let content = json!({
                                 "post_title": issue.title,
