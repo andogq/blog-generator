@@ -588,6 +588,7 @@ dependencies = [
  "base64",
  "cfg-if 0.1.10",
  "console_error_panic_hook",
+ "futures",
  "pulldown-cmark",
  "serde",
  "worker",

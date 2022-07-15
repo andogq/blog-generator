@@ -1,7 +1,7 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
-use worker::{console_log, Fetch, Request, RequestInit};
+use worker::{console_log, Fetch, Method, Request, RequestInit};
 
 use crate::utils::Source;
 
@@ -10,6 +10,12 @@ static TARGET: &str = "https://api.github.com";
 fn request_init() -> RequestInit {
     let mut init = RequestInit::new();
     init.headers.set("user-agent", "rust").unwrap();
+    init.headers
+        .set(
+            "Authorization",
+            "Basic YW5kb2dxOmdocF9iM0ROZGtHdkxZdDZOSjNBdG9FdUp1R1E5cmVTOEw0SU5XRUY=",
+        )
+        .unwrap();
 
     init
 }
@@ -25,10 +31,12 @@ where
 
     if let Ok(mut response) = request.send().await {
         console_log!("{} {}", endpoint, response.status_code());
-        if let Ok(object) = response.json().await {
-            Some(object)
-        } else {
-            None
+        match response.json().await {
+            Ok(object) => Some(object),
+            Err(e) => {
+                console_log!("{:?}", e);
+                None
+            }
         }
     } else {
         None
@@ -55,9 +63,95 @@ pub struct User {
     pub company: String,
 }
 
+#[derive(Deserialize)]
+struct PinnedRepoResponsePinnedItemNode {
+    name: String,
+}
+#[derive(Deserialize)]
+struct PinnedRepoResponsePinnedItems {
+    nodes: Vec<PinnedRepoResponsePinnedItemNode>,
+}
+#[derive(Deserialize)]
+struct PinnedRepoResponseUser {
+    pinnedItems: PinnedRepoResponsePinnedItems,
+}
+#[derive(Deserialize)]
+struct PinnedRepoResponseData {
+    user: PinnedRepoResponseUser,
+}
+#[derive(Deserialize)]
+struct PinnedRepoResponse {
+    data: PinnedRepoResponseData,
+}
+
 impl User {
     pub async fn get(user: &str) -> Option<User> {
         request::<User>(&format!("/users/{}", user)).await
+    }
+
+    pub async fn get_repo(&self, repo_name: String) -> Option<Repo> {
+        if let (Some(repo), Some(languages)) = (
+            request::<Repo>(&format!("/repos/{}/{}", self.username, repo_name)).await,
+            request::<HashMap<String, u32>>(&format!(
+                "/repos/{}/{}/languages",
+                self.username, repo_name
+            ))
+            .await,
+        ) {
+            Some(Repo {
+                languages: languages.keys().into_iter().cloned().collect(),
+                ..repo
+            })
+        } else {
+            None
+        }
+    }
+
+    pub async fn get_pinned(&self, gh_key: &str) -> Vec<Repo> {
+        let mut init = request_init();
+        init.method = Method::Post;
+        init.headers
+            .set(
+                "Authorization",
+                &format!(
+                    "Basic {}",
+                    base64::encode(format!("{}:{}", "andogq", gh_key))
+                ),
+            )
+            .unwrap();
+        init.body = Some(format!(
+            r#"{{
+	"query": "query{{user(login:\"{}\"){{pinnedItems(first:6,types:REPOSITORY){{nodes{{... on Repository{{name}}}}}}}}}}",
+	"variables": {{}}
+}}"#, self.username)
+            .into(),
+        );
+
+        let endpoint = format!("{}{}", TARGET, "/graphql");
+        let request = Fetch::Request(Request::new_with_init(&endpoint, &init).unwrap());
+
+        if let Ok(mut response) = request.send().await {
+            console_log!("{} {}", endpoint, response.status_code());
+            if let Ok(object) = response.json::<PinnedRepoResponse>().await {
+                futures::future::join_all(
+                    object
+                        .data
+                        .user
+                        .pinnedItems
+                        .nodes
+                        .into_iter()
+                        .map(|repo| self.get_repo(repo.name)),
+                )
+                .await
+                .into_iter()
+                .flatten()
+                .collect()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
     }
 }
 
@@ -147,27 +241,45 @@ impl File {
     }
 }
 
+#[derive(Deserialize)]
 pub struct Repo {
-    pub user: String,
+    pub full_name: String,
     pub name: String,
+
+    pub homepage: Option<String>,
+    pub description: Option<String>,
+    pub topics: Vec<String>,
+
+    // Field doesn't come from repo API call, second call must happen
+    #[serde(default)]
+    pub languages: Vec<String>,
+
+    #[serde(rename = "forks_count")]
+    pub forks: u32,
+    #[serde(rename = "stargazers_count")]
+    pub stargazers: u32,
+    #[serde(rename = "watchers_count")]
+    pub watchers: u32,
+
+    pub html_url: String,
 }
 
 impl Repo {
     pub async fn get_issue(&self, issue_number: u32) -> Option<Issue> {
         request::<Issue>(&format!(
-            "/repos/{}/{}/issues/{}",
-            self.user, self.name, issue_number
+            "/repos/{}/issues/{}",
+            self.full_name, issue_number
         ))
         .await
     }
 
     pub async fn get_issues(&self) -> Vec<Issue> {
-        request::<Vec<Issue>>(&format!("/repos/{}/{}/issues", self.user, self.name))
+        request::<Vec<Issue>>(&format!("/repos/{}/issues", self.full_name))
             .await
             .unwrap_or_default()
     }
 
     pub fn get_contents_path(&self, path: &str) -> String {
-        format!("/repos/{}/{}/contents{}", self.user, self.name, path)
+        format!("/repos/{}/contents{}", self.full_name, path)
     }
 }

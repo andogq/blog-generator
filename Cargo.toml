@@ -15,6 +15,7 @@ worker = "0.0.9"
 serde = "1.0.138"
 pulldown-cmark = "0.9.1"
 base64 = "0.13.0"
+futures = "0.3.21"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

@@ -1,4 +1,4 @@
-name = "" # todo
+name = "github_blog"
 workers_dev = true
 
 main = "build/worker/shim.mjs"
