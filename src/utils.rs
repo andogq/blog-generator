@@ -11,10 +11,6 @@ cfg_if! {
     }
 }
 
-pub fn replace(template: String, key: &str, value: &str) -> String {
-    template.replace(&format!("{{{{{}}}}}", key), value)
-}
-
 pub trait Source {
     fn get_key_values(&self) -> Vec<(String, String)>;
 }
