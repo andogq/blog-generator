@@ -60,18 +60,11 @@ type URI = String;
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/github.schema.graphql",
-    query_path = "graphql/home.query.graphql",
-    response_derives = "Debug"
+    query_path = "graphql/query.graphql",
+    response_derives = "Debug",
+    variables_derives = "Debug"
 )]
-struct HomeQuery;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "graphql/github.schema.graphql",
-    query_path = "graphql/post.query.graphql",
-    response_derives = "Debug"
-)]
-struct PostQuery;
+struct Query;
 
 #[event(fetch)]
 pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
@@ -79,185 +72,174 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
 
     utils::set_panic_hook();
 
-    Router::new()
-        .get_async("/", |_, RouteContext { env, .. }| async move {
-            let variables = home_query::Variables {
-                user: "andogq".to_string(),
-            };
+    // Prepare GraphQL response
+    let path = req.path();
+    let path = path.split('/').skip(1).collect::<Vec<&str>>();
 
-            let request_init = {
-                let mut init = RequestInit::new();
-                init.with_headers({
-                    let mut headers = Headers::new();
-                    headers.set("User-Agent", "rust").unwrap();
-                    headers
-                        .set(
-                            "Authorization",
-                            &format!("Bearer {}", env.secret("gh_key").unwrap().to_string()),
-                        )
-                        .unwrap();
-                    headers
-                })
-                .with_method(Method::Post)
-                .with_body(
-                    serde_json::to_string(&HomeQuery::build_query(variables))
-                        .ok()
-                        .map(|val| val.into()),
-                );
+    let mut variables = query::Variables {
+        user: "andogq".to_string(),
+        post: 1,
+        posts: 0,
+    };
+    let mut template = "404";
 
-                init
-            };
-
-            if let Ok(mut response) = Fetch::Request(
-                Request::new_with_init("https://api.github.com/graphql", &request_init).unwrap(),
-            )
-            .send()
-            .await
-            {
-                if let Ok(graphql_client::Response {
-                    data:
-                        Some(home_query::ResponseData {
-                            user: Some(user),
-                            repository: Some(repository),
-                        }),
-                    ..
-                }) = response
-                    .json::<graphql_client::Response<home_query::ResponseData>>()
-                    .await
-                {
-                    let templates = repository.templates.map(|templates| match templates {
-                        home_query::HomeQueryRepositoryTemplates::Tree(
-                            home_query::HomeQueryRepositoryTemplatesOnTree {
-                                entries: Some(templates),
-                            },
-                        ) => templates.into_iter().filter_map(|template| {
-                            if let home_query::HomeQueryRepositoryTemplatesOnTreeEntries {
-                                name,
-                                object: Some(home_query::HomeQueryRepositoryTemplatesOnTreeEntriesObject::Blob(home_query::HomeQueryRepositoryTemplatesOnTreeEntriesObjectOnBlob {
-                                    text: Some(template)
-                                }))
-                            } = template {
-                                Some((name.replace(".html", ""), template))
-                            } else { None }
-                        }).collect::<HashMap<String, String>>(),
-                        _ => HashMap::new()
-                    }).unwrap_or_default();
-
-                    let content = json!({
-                        "name": user.name,
-                        "profile_picture": user.profile_picture,
-                        "bio": user.bio,
-                        "hireable": if user.hireable { "yes" } else { "no" },
-                        "body": repository.readme.map(|readme| match readme {
-                            home_query::HomeQueryRepositoryReadme::Blob(
-                                home_query::HomeQueryRepositoryReadmeOnBlob { text: Some(text) },
-                            ) => render_markdown(&text),
-                            _ => "".to_string(),
-                        }),
-                        "posts": repository.posts.nodes
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter_map(|post| {
-                                post.map(|post| json!({
-                                    "link": format!("/posts/{}", post.number),
-                                    "title": post.title
-                                }))
-                            })
-                            .collect::<Vec<serde_json::Value>>(),
-                        "pinned": user.pinned_items
-                            .nodes
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter_map(
-                                |pinned| if let Some(home_query::HomeQueryUserPinnedItemsNodes::Repository(home_query::HomeQueryUserPinnedItemsNodesOnRepository {
-                                    name,
-                                    description,
-                                    languages: Some(languages)
-                                })) = pinned {
-                                    Some(json!({
-                                        "name": name,
-                                        "description": description,
-                                        "languages": languages.nodes
-                                            .unwrap_or_default()
-                                            .into_iter()
-                                            .filter_map(|language| language.map(|language| language.name))
-                                            .collect::<Vec<String>>()
-                                            .join(", ")
-                                    }))
-                                } else { None }
-                            )
-                            .collect::<Vec<serde_json::Value>>()
-                    });
-
-                    if let (Some(core_template), Some(home_template)) = (templates.get("core"), templates.get("home")) {
-                        if let Some(html) = generate_page(core_template, home_template, &user.name.unwrap_or_else(|| "Portfolio".to_string()), content) {
-                            return Response::from_html(html);
-                        }
-                    }
-                }
+    match *path.get(0).unwrap() {
+        "" => {
+            // Home page
+            variables.posts = 10;
+            template = "home";
+        }
+        "post" => {
+            // Post
+            if let Some(Ok(post_id)) = path.get(1).map(|id| id.parse::<i64>()) {
+                variables.post = post_id;
+                template = "post";
             }
+        }
+        _ => {
+            // Other
+        }
+    };
 
-            Response::error("Internal error", 500)
-        })
-        .get_async("/posts/:id", |_, ctx| async move {
-            if let Ok(id) = ctx.param("id").unwrap().parse::<u32>() {
-                let variables = post_query::Variables {
-                    user: "andogq".to_string(),
-                    post: id as i64
-                };
+    // Make request
+    let request_init = {
+        let mut init = RequestInit::new();
 
-                let request_init = {
-                    let mut init = RequestInit::new();
-                    init.with_headers({
-                        let mut headers = Headers::new();
-                        headers.set("User-Agent", "rust").unwrap();
-                        headers
-                            .set(
-                                "Authorization",
-                                &format!("Bearer {}", ctx.env.secret("gh_key").unwrap().to_string()),
-                            )
-                            .unwrap();
-                        headers
-                    })
-                    .with_method(Method::Post)
-                    .with_body(
-                        serde_json::to_string(&PostQuery::build_query(variables))
-                            .ok()
-                            .map(|val| val.into()),
-                    );
-
-                    init
-                };
-
-                if let Ok(mut response) = Fetch::Request(
-                    Request::new_with_init("https://api.github.com/graphql", &request_init).unwrap(),
+        init.with_headers({
+            let mut headers = Headers::new();
+            headers.set("User-Agent", "rust").unwrap();
+            headers
+                .set(
+                    "Authorization",
+                    &format!("Bearer {}", env.secret("gh_key").unwrap().to_string()),
                 )
-                .send()
-                .await
-                {
-                    if let Ok(graphql_client::Response {
-                        data:
-                            Some(post_query::ResponseData {
-                                repository: Some(post_query::PostQueryRepository {
-                                    issue: Some(post)
-                                })
-                            }),
-                        ..
-                    }) = response
-                        .json::<graphql_client::Response<post_query::ResponseData>>()
-                        .await {
-                        let _content = json!({
-                            "post_title": post.title,
-                            "post_body": render_markdown(&post.body)
-                        });
+                .unwrap();
+            headers
+        })
+        .with_method(Method::Post)
+        .with_body(
+            serde_json::to_string(&Query::build_query(variables))
+                .ok()
+                .map(|val| val.into()),
+        );
 
-                        return Response::from_html(render_markdown(&post.body));
+        init
+    };
+
+    if let Ok(mut response) = Fetch::Request(
+        Request::new_with_init("https://api.github.com/graphql", &request_init).unwrap(),
+    )
+    .send()
+    .await
+    {
+        if let Ok(graphql_client::Response {
+            data:
+                Some(query::ResponseData {
+                    user: Some(user),
+                    repository:
+                        Some(query::QueryRepository {
+                            readme,
+                            templates:
+                                Some(query::QueryRepositoryTemplates::Tree(
+                                    query::QueryRepositoryTemplatesOnTree {
+                                        entries: Some(templates),
+                                    },
+                                )),
+                            posts,
+                            post,
+                        }),
+                }),
+            ..
+        }) = response
+            .json::<graphql_client::Response<query::ResponseData>>()
+            .await
+        {
+            let post = post.map(|post| (post.title, render_markdown(&post.body)));
+
+            // Process data here
+            let content = json!({
+                "name": user.name,
+                "profile_picture": user.profile_picture,
+                "bio": user.bio,
+                "hireable": if user.hireable { "yes" } else { "no" },
+                "body": readme.map(|readme| match readme {
+                    query::QueryRepositoryReadme::Blob(
+                        query::QueryRepositoryReadmeOnBlob { text: Some(text) },
+                    ) => render_markdown(&text),
+                    _ => "".to_string(),
+                }),
+                "posts": posts.nodes
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|post| {
+                        post.map(|post| json!({
+                            "link": format!("/post/{}", post.number),
+                            "title": post.title
+                        }))
+                    })
+                    .collect::<Vec<serde_json::Value>>(),
+                "pinned": user.pinned_items
+                    .nodes
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(
+                        |pinned| if let Some(query::QueryUserPinnedItemsNodes::Repository(query::QueryUserPinnedItemsNodesOnRepository {
+                            name,
+                            description,
+                            languages: Some(languages)
+                        })) = pinned {
+                            Some(json!({
+                                "name": name,
+                                "description": description,
+                                "languages": languages.nodes
+                                    .unwrap_or_default()
+                                    .into_iter()
+                                    .filter_map(|language| language.map(|language| language.name))
+                                    .collect::<Vec<String>>()
+                                    .join(", ")
+                            }))
+                        } else { None }
+                    )
+                    .collect::<Vec<serde_json::Value>>(),
+                "post": post.clone().map(|post| json!({ "title": post.0, "body": post.1 }))
+            });
+
+            let title = match template {
+                "home" => user.name.unwrap_or_else(|| "Portfolio".to_string()),
+                "post" => post
+                    .map(|post| post.0)
+                    .unwrap_or_else(|| "Post".to_string()),
+                _ => "Portfolio".to_string(),
+            };
+
+            let templates = templates
+                .into_iter()
+                .filter_map(|template| {
+                    if let (name, Some(Some(text))) = (
+                        template.name,
+                        template.object.map(|object| match object {
+                            query::QueryRepositoryTemplatesOnTreeEntriesObject::Blob(
+                                query::QueryRepositoryTemplatesOnTreeEntriesObjectOnBlob { text },
+                            ) => text,
+                            _ => None,
+                        }),
+                    ) {
+                        Some((name.replace(".html", ""), text))
+                    } else {
+                        None
                     }
+                })
+                .collect::<HashMap<String, String>>();
+
+            if let (Some(core_template), Some(page_template)) =
+                (templates.get("core"), templates.get(template))
+            {
+                if let Some(html) = generate_page(core_template, page_template, &title, content) {
+                    return Response::from_html(html);
                 }
             }
+        }
+    }
 
-            Response::error("Internal error", 500)
-        })
-        .run(req, env)
-        .await
+    Response::error("Not Found", 404)
 }

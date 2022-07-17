@@ -1,4 +1,4 @@
-query HomeQuery($user: String!) {
+query Query($user: String!, $post: Int!, $posts: Int!) {
   user(login: $user) {
     name
     profile_picture: avatarUrl
@@ -40,11 +40,15 @@ query HomeQuery($user: String!) {
         }
       }
     }
-    posts: issues(states: OPEN, last: 50) {
+    posts: issues(states: OPEN, last: $posts) {
       nodes {
         title
         number
       }
+    },
+    post: issue(number: $post) {
+      title,
+      body
     }
   }
 }

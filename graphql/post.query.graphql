@@ -1,8 +1,0 @@
-query PostQuery($post: Int!, $user: String!) {
-  repository(name: $user, owner: $user) {
-    issue(number: $post) {
-      title,
-      body
-    }
-  }
-}
