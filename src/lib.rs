@@ -56,13 +56,12 @@ fn log_request(req: &Request) {
 
 #[allow(clippy::upper_case_acronyms)]
 type URI = String;
+type DateTime = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/github.schema.graphql",
-    query_path = "graphql/query.graphql",
-    response_derives = "Debug",
-    variables_derives = "Debug"
+    query_path = "graphql/query.graphql"
 )]
 struct Query;
 
@@ -154,15 +153,28 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
             .json::<graphql_client::Response<query::ResponseData>>()
             .await
         {
-            let post = post.map(|post| (post.title, render_markdown(&post.body)));
+            let user_name = user.name.unwrap_or_default();
+            let post_title = post.as_ref().map(|post| post.title.to_owned());
 
             // Process data here
             let content = json!({
-                "name": user.name,
-                "profile_picture": user.profile_picture,
-                "bio": user.bio,
-                "hireable": if user.hireable { "yes" } else { "no" },
-                "body": readme.map(|readme| match readme {
+                "user": json!({
+                    "name": user_name,
+                    "profile_picture": user.profile_picture,
+                    "email": user.email,
+                    "bio": user.bio,
+
+                    "location": user.location,
+                    "hireable": user.hireable,
+                    "company": user.company,
+
+                    "github_profile": user.url,
+                    "twitter_profile": user.twitter_username.map(|username| format!("https://twitter.com/{}", username)),
+
+                    "followers": user.followers.total_count,
+                    "following": user.following.total_count,
+                }),
+                "readme": readme.map(|readme| match readme {
                     query::QueryRepositoryReadme::Blob(
                         query::QueryRepositoryReadmeOnBlob { text: Some(text) },
                     ) => render_markdown(&text),
@@ -173,8 +185,21 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                     .into_iter()
                     .filter_map(|post| {
                         post.map(|post| json!({
+                            "title": post.title,
                             "link": format!("/post/{}", post.number),
-                            "title": post.title
+                            "labels": post.labels
+                                .map(|labels| labels.nodes
+                                     .unwrap_or_default()
+                                     .into_iter()
+                                     .filter_map(|label| label.map(|label| json!({
+                                         "name": label.name,
+                                         "color": label.color
+                                     })))
+                                    .collect::<Vec<serde_json::Value>>(),
+                                )
+                                .unwrap_or_default(),
+                            "created": post.created_at,
+                            "updated": post.updated_at
                         }))
                     })
                     .collect::<Vec<serde_json::Value>>(),
@@ -183,11 +208,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                     .unwrap_or_default()
                     .into_iter()
                     .filter_map(
-                        |pinned| if let Some(query::QueryUserPinnedItemsNodes::Repository(query::QueryUserPinnedItemsNodesOnRepository {
-                            name,
-                            description,
-                            languages: Some(languages)
-                        })) = pinned {
+                        |pinned| if let Some(query::QueryUserPinnedItemsNodes::Repository(query::QueryUserPinnedItemsNodesOnRepository {name,description,homepage_url,github_url,languages:Some(languages), fork_count, stargazer_count })) = pinned {
                             Some(json!({
                                 "name": name,
                                 "description": description,
@@ -196,19 +217,37 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                                     .into_iter()
                                     .filter_map(|language| language.map(|language| language.name))
                                     .collect::<Vec<String>>()
-                                    .join(", ")
+                                    .join(", "),
+                                "homepage": homepage_url,
+                                "stargazers": stargazer_count,
+                                "forks": fork_count,
+                                "github_url": github_url
                             }))
                         } else { None }
                     )
                     .collect::<Vec<serde_json::Value>>(),
-                "post": post.clone().map(|post| json!({ "title": post.0, "body": post.1 }))
+                "post": post.map(|post| json!({
+                    "title": post.title,
+                    "body": render_markdown(&post.body),
+                    "labels": post.labels
+                        .map(|labels| labels.nodes
+                             .unwrap_or_default()
+                             .into_iter()
+                             .filter_map(|label| label.map(|label| json!({
+                                 "name": label.name,
+                                 "color": label.color
+                             })))
+                            .collect::<Vec<serde_json::Value>>(),
+                        )
+                        .unwrap_or_default(),
+                    "created": post.created_at,
+                    "updated": post.updated_at
+                }))
             });
 
             let title = match template {
-                "home" => user.name.unwrap_or_else(|| "Portfolio".to_string()),
-                "post" => post
-                    .map(|post| post.0)
-                    .unwrap_or_else(|| "Post".to_string()),
+                "home" => user_name,
+                "post" => post_title.unwrap_or_else(|| "Post".to_string()),
                 _ => "Portfolio".to_string(),
             };
 

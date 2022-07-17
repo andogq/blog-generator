@@ -1,48 +1,78 @@
-# Template: worker-rust
+# Available Variables
 
-A template for kick starting a Cloudflare worker project using [`workers-rs`](https://github.com/cloudflare/workers-rs).
+Any blocks that will contain markdown must be wrapped in `{{{` (instead of the
+usual `{{`), as this will ensure that the rendered HTML remains un-escaped.
 
-This template is designed for compiling Rust to WebAssembly and publishing the resulting worker to Cloudflare's [edge infrastructure](https://www.cloudflare.com/network/).
+Some blocks include:
+ - `readme`
+ - `post.body`
+ - `content` (in `core.html`)
 
-## Setup
+## Template Variables
 
-To create a `my-project` directory using this template, run:
+```json
+{
+    "user": {
+        "name": "John Smith",
+        "profile_picture": "https://example.com/image.jpg",
+        "email": "email@example.com",
+        "bio": "Aliquid atque amet voluptate non minima nostrum officiis.",
 
-```sh
-$ npm init cloudflare my-project worker-rust
-# or
-$ yarn create cloudflare my-project worker-rust
-# or
-$ pnpm create cloudflare my-project worker-rust
+        "location": "Melbourne, Australia",
+        "hireable": true,
+        "company": "Some Company",
+
+        "github_profile": "https://github.com/andogq",
+        "twitter_profile": https://twitter.com/andogq",
+
+        "followers": 10,
+        "following: 10
+    },
+    "readme": "<h1>About me</h1><p>Lorem ipsum dolor sit amet...</p>", // Rendered contents of user's README
+    "posts": [
+        {
+            "title": "Lorem ipsum",
+            "link": "/post/1"
+            "labels": [
+                {
+                    "name": "Some Label",
+                    "color": "#ffcc00"
+                }
+            ],
+            "created": "2022-07-10T09:20:00Z",
+            "updated": "2022-07-11T13:05:00Z"
+        }
+    ],
+    "pinned": [ // User's pinned repositories
+        {
+            "name": "Some repo",
+            "description": "This is a repo that does something.",
+            "languages": "JavaScript, HTML, CSS",
+            "homepage": "https://example.com",
+            "stargazers": 10,
+            "forks": 10,
+            "github_url": "https://github.com/andogq/some_repo"
+        }
+    ],
+    "post": { // Only present if loading a post
+        "title": Lorem ipsum",
+        "body": "<p>Lorem ipsum dolor sit amet...</p>",
+        "labels": [
+            {
+                "name": "Some Label",
+                "color": "#ffcc00"
+            }
+        ],
+        "created": "2022-07-10T09:20:00Z",
+        "updated": "2022-07-11T13:05:00Z"
+    }
+}
 ```
 
-> **Note:** Each command invokes [`create-cloudflare`](https://www.npmjs.com/package/create-cloudflare) for project creation.
+## Core Variables
 
-## Usage
+These variables are required in the `core.html` template.
 
-This template starts you off with a `src/lib.rs` file, acting as an entrypoint for requests hitting your Worker. Feel free to add more code in this file, or create Rust modules anywhere else for this project to use.
+ - `title`: Renders the title of the page (normally in the `<title>` HTML tag)
+ - `content`: Renders the contend of the page (normally directly in the `<body>` HTML tag)
 
-With `wrangler`, you can build, test, and deploy your Worker with the following commands:
-
-```sh
-# compiles your project to WebAssembly and will warn of any issues
-$ npm run build
-
-# run your Worker in an ideal development workflow (with a local server, file watcher & more)
-$ npm run dev
-
-# deploy your Worker globally to the Cloudflare network (update your wrangler.toml file for configuration)
-$ npm run deploy
-```
-
-Read the latest `worker` crate documentation here: https://docs.rs/worker
-
-## WebAssembly
-
-`workers-rs` (the Rust SDK for Cloudflare Workers used in this template) is meant to be executed as compiled WebAssembly, and as such so **must** all the code you write and depend upon. All crates and modules used in Rust-based Workers projects have to compile to the `wasm32-unknown-unknown` triple.
-
-Read more about this on the [`workers-rs`](https://github.com/cloudflare/workers-rs) project README.
-
-## Issues
-
-If you have any problems with the `worker` crate, please open an issue on the upstream project issue tracker on the [`workers-rs` repository](https://github.com/cloudflare/workers-rs).

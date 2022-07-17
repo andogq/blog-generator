@@ -3,6 +3,17 @@ query Query($user: String!, $post: Int!, $posts: Int!) {
     name
     profile_picture: avatarUrl
     bio
+    company
+    email
+    followers {
+      totalCount
+    }
+    following {
+      totalCount
+    }
+    location
+    url
+    twitterUsername
     hireable: isHireable
     pinnedItems(last: 6, types: REPOSITORY) {
       nodes {
@@ -10,6 +21,10 @@ query Query($user: String!, $post: Int!, $posts: Int!) {
         ... on Repository {
           name
           description
+          homepageUrl
+          github_url: url
+          forkCount
+          stargazerCount
           languages(first: 5) {
             nodes {
               name
@@ -42,13 +57,25 @@ query Query($user: String!, $post: Int!, $posts: Int!) {
     }
     posts: issues(states: OPEN, last: $posts) {
       nodes {
-        title
-        number
+        ...postFields
       }
-    },
+    }
     post: issue(number: $post) {
-      title,
-      body
+      ...postFields
     }
   }
+}
+
+fragment postFields on Issue {
+	title,
+  number,
+  body,
+  labels(first: 5) {
+    nodes {
+      name,
+      color
+    }
+  },
+  createdAt,
+  updatedAt
 }
