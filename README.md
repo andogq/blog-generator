@@ -65,7 +65,8 @@ Some blocks include:
         ],
         "created": "2022-07-10T09:20:00Z",
         "updated": "2022-07-11T13:05:00Z"
-    }
+    },
+    "page": "home", // Type of the page that is being rendered
 }
 ```
 
@@ -76,3 +77,5 @@ These variables are required in the `core.html` template.
  - `title`: Renders the title of the page (normally in the `<title>` HTML tag)
  - `content`: Renders the contend of the page (normally directly in the `<body>` HTML tag)
 
+Also within `core.html` is the `page_variables` variable, which contains the
+object in the same form as above.

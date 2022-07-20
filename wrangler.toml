@@ -4,6 +4,10 @@ workers_dev = true
 main = "build/worker/shim.mjs"
 compatibility_date = "2022-01-20"
 
+kv_namespaces = [
+    { binding = "domains", id = "f7a1938bff8841e8a588eb7b50a232fc", preview_id = "547898a5745448bd81f91fc0fae93ec1" }
+]
+
 [vars]
 WORKERS_RS_VERSION = "0.0.9"
 
