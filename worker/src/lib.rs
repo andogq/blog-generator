@@ -291,13 +291,19 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                         if let Some(html) =
                             generate_page(core_template, page_template, &title, content)
                         {
-                            return Response::from_html(html);
+                            Response::from_html(html)
+                        } else {
+                            Response::error("Problem generating template", 500)
                         }
+                    } else {
+                        Response::error("Problem getting template", 500)
                     }
+                } else {
+                    Response::error("Problem with decoding graphql", 500)
                 }
+            } else {
+                Response::error("Problem with graphql", 500)
             }
-
-            Response::error("Not Found", 404)
         } else {
             Response::error("Domain not found", 400)
         }
