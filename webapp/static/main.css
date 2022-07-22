@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@700&family=Montserrat&display=swap');
+
+:root {
+    --background: #242732;
+    --background-light: #323845;
+    --text: #FFFFFF;
+    --accent: #FDAE41;
+    --grey: #CECECE;
+    
+    --space-xs: 0.75rem;
+    --space-sm: 3rem;
+    --space-md: 10rem;
+    --space-lg: 20rem;
+
+    --border-width: 2px;
+    --border-radius: 15px;
+
+    --transition: 0.1s ease-in-out;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+
+    box-sizing: border-box;
+    font-family: 'Montserrat', sans-serif;
+}
+
+html, body {
+    height: 100vh;
+    width: 100vw;
+
+    overflow: hidden;
+
+    fill: var(--text);
+    color: var(--text);
+
+    background: var(--background);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Comfortaa', sans-serif;
+}
+
+h1:not(.no_line)::after, h2:not(.no_line)::after, h3:not(.no_line)::after, h4:not(.no_line)::after, h5:not(.no_line)::after, h6:not(.no_line)::after, .line::after {
+    content: "";
+    height: 5px;
+    width: 100px;
+    margin-top: var(--space-xs);
+
+    display: block;
+
+    border-radius: var(--border-radius);
+
+    background-color: var(--accent);
+
+    transition: width var(--transition);
+}
+.hover_line:hover::after, .line.full_width::after {
+    width: 100%;
+}
+
+h1 {
+    font-size: 2rem;
+}
+h2 {
+    font-size: 1.5rem;
+}
+h3 {
+    font-size: 1.17rem;
+}
+h4 {
+    font-size: 1rem;
+}
+h5 {
+    font-size: 0.83rem;
+}
+h6 {
+    font-size: 0.67rem;
+}
+
+a {
+    text-decoration: none;
+    cursor: pointer;
+}
+a.no_link {
+    color: unset;
+}
+a:not(.no_link) {
+    color: var(--accent);
+}
+
+a:not(.no_link):hover {
+    text-decoration: underline;
+}
+
+button {
+    font-size: 1rem;
+    background: none;
+    color: inherit;
+
+    padding: var(--space-xs);
+
+    border: var(--border-width) solid var(--text);
+    border-radius: var(--border-radius);
+
+
+    transition: border var(--transition), background var(--transition);
+}
+button:not([disabled]) {
+    cursor: pointer;
+}
+button[default] {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    color: var(--text);
+    mix-blend-mode: lighten;
+}
+button[disabled] {
+    opacity: 0.5;
+}
+button:not([disabled]):hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: inherit;
+}
+button:not([disabled]):active {
+    background-color: var(--accent);
+}
+button:focus {
+    outline: none;
+}
+
+#app {
+    height: 100%;
+    width: 100%;
+
+    overflow: hidden;
+}
+
+@keyframes bob {
+    0% {
+        bottom: calc(var(--space-sm) + var(--space-xs));
+    }
+
+    10% {
+        bottom: calc(var(--space-sm) + var(--space-xs));
+    }
+    
+    50% {
+        bottom: var(--space-sm);
+    }
+
+    90% {
+        bottom: calc(var(--space-sm) + var(--space-xs));
+    }
+}
+
+@media (max-width: 1600px) {
+    :root {
+        --space-xs: 0.75rem;
+        --space-sm: 3rem;
+        --space-md: 6rem;
+        --space-lg: 10rem;
+    }
+}
+
+@media (max-width: 900px) {
+    :root {
+        --space-xs: 0.5rem;
+        --space-sm: 2rem;
+        --space-md: 3rem;
+        --space-lg: 6rem;
+    }
+}
