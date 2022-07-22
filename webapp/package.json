@@ -13,6 +13,7 @@
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "next",
 		"@sveltejs/kit": "next",
+		"@types/cloudflare": "^2.7.8",
 		"@typescript-eslint/eslint-plugin": "^5.27.0",
 		"@typescript-eslint/parser": "^5.27.0",
 		"svelte": "^3.44.0",
@@ -22,5 +23,10 @@
 		"typescript": "^4.7.4",
 		"vite": "^3.0.0"
 	},
-	"type": "module"
+	"type": "module",
+	"dependencies": {
+		"cloudflare": "^2.9.1",
+		"dotenv": "^16.0.1",
+		"jose": "^4.8.3"
+	}
 }
