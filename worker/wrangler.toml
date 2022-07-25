@@ -4,6 +4,8 @@ workers_dev = true
 main = "build/worker/shim.mjs"
 compatibility_date = "2022-01-20"
 
+type="rust"
+
 kv_namespaces = [
     { binding = "domains", id = "f7a1938bff8841e8a588eb7b50a232fc", preview_id = "547898a5745448bd81f91fc0fae93ec1" }
 ]
@@ -13,3 +15,17 @@ WORKERS_RS_VERSION = "0.0.9"
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"
+
+[build.upload]
+format = "modules"
+dir = "build/worker"
+main = "./shim.mjs"
+
+[[build.upload.rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+
+[miniflare]
+durable_objects_persist = true
+kv_persist = true
+watch = true
