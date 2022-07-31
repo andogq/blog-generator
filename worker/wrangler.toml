@@ -25,7 +25,13 @@ main = "./shim.mjs"
 type = "CompiledWasm"
 globs = ["**/*.wasm"]
 
+[durable_objects]
+bindings = [
+    { name = "COUNTER", class_name = "Counter" }
+]
+
 [miniflare]
 durable_objects_persist = true
 kv_persist = true
 watch = true
+env_path=".dev.vars"
