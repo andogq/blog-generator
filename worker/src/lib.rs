@@ -70,7 +70,7 @@ type DateTime = String;
 )]
 struct Query;
 
-const DURABLE_OBJECT_WHITELIST: &[&str] = &["referral_code", "counter"];
+const DURABLE_OBJECT_WHITELIST: &[&str] = &["referral_code"];
 
 #[event(fetch)]
 pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
@@ -136,6 +136,8 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                                 path.collect::<Vec<String>>().join("/"),
                             ) {
                                 if DURABLE_OBJECT_WHITELIST.contains(&object.as_str()) {
+                                    console_log!("In whitelist, {}", object.to_uppercase());
+
                                     if let Ok(Ok(Ok(stub))) =
                                         env.durable_object(&object.to_uppercase()).map(|object| {
                                             object
@@ -143,6 +145,7 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                                                 .map(|instance| instance.get_stub())
                                         })
                                     {
+                                        console_log!("found stab");
                                         return stub
                                             .fetch_with_request(
                                                 Request::new_with_init(

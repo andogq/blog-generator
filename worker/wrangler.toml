@@ -27,7 +27,7 @@ globs = ["**/*.wasm"]
 
 [durable_objects]
 bindings = [
-    { name = "COUNTER", class_name = "Counter" }
+    { name = "REFERRAL_CODE", class_name = "ReferralToken" }
 ]
 
 [miniflare]
