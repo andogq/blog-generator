@@ -70,6 +70,7 @@ type DateTime = String;
 )]
 struct Query;
 
+// TODO: pull from Cargo.toml
 const DURABLE_OBJECT_WHITELIST: &[&str] = &["referral_code"];
 
 #[event(fetch)]
@@ -102,14 +103,13 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                         "kv" => {
                             if let (Some(store_name), Some(key)) = (path.next(), path.next()) {
                                 if let Ok(store) = env.kv(&store_name) {
-                                    console_log!("{}", key);
                                     if let Some::<String>(res) = match req.method() {
                                         Method::Get => store.get(&key).text().await.unwrap_or(None),
                                         Method::Post => {
                                             if let Ok(body) = req.text().await {
                                                 if let Ok(put) = store.put(&key, body) {
                                                     if put.execute().await.is_ok() {
-                                                        Some("ok".to_string())
+                                                        Some("{ \"ok\": true }".to_string())
                                                     } else {
                                                         None
                                                     }
@@ -136,8 +136,6 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                                 path.collect::<Vec<String>>().join("/"),
                             ) {
                                 if DURABLE_OBJECT_WHITELIST.contains(&object.as_str()) {
-                                    console_log!("In whitelist, {}", object.to_uppercase());
-
                                     if let Ok(Ok(Ok(stub))) =
                                         env.durable_object(&object.to_uppercase()).map(|object| {
                                             object
@@ -145,7 +143,6 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                                                 .map(|instance| instance.get_stub())
                                         })
                                     {
-                                        console_log!("found stab");
                                         return stub
                                             .fetch_with_request(
                                                 Request::new_with_init(
@@ -192,8 +189,6 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                 .map(|url| url.domain().map(|domain| domain.to_string())),
         ) {
             if let Ok(Some(user)) = domains_store.get(&domain).text().await {
-                console_log!("{}", user);
-
                 // Prepare GraphQL response
                 let path = req.path();
                 let path = path.split('/').skip(1).collect::<Vec<&str>>();

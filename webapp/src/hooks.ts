@@ -13,8 +13,6 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (jwt) {
         let user = await verify(jwt);
 
-        console.log(user);
-
         if (user) event.locals.user = user;
         else remove_token_cookie = true;
     }

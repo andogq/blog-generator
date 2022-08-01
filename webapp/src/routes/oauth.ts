@@ -1,7 +1,7 @@
 import type { RequestHandler } from "@sveltejs/kit";
 import { add_auth_token } from "$lib/cloudflare";
 import { get_user } from "$lib/github";
-import { sign, verify } from "$lib/jwt";
+import { sign } from "$lib/jwt";
 
 export const GET: RequestHandler = async ({ url }) => {
     let code = url.searchParams.get("code");
@@ -33,7 +33,7 @@ export const GET: RequestHandler = async ({ url }) => {
                 if (user) {
                     let response = await add_auth_token(user, access_token);
 
-                    if (response.success) {
+                    if (response) {
                         // Create JWT
                         let jwt = await sign(user);
 

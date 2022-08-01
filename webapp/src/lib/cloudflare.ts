@@ -1,21 +1,59 @@
-import Cloudflare from "cloudflare";
+const WORKER_URL = process.env["WORKER_URL"] || "";
+const WORKER_SECRET_TOKEN = process.env["WORKER_SECRET_TOKEN"] || "";
 
-const CLOUDFLARE_TOKEN = process.env["CLOUDFLARE_TOKEN"] || "";
-const CLOUDFLARE_ACCOUNT_ID = process.env["CLOUDFLARE_ACCOUNT_ID"] || "";
-const CLOUDFLARE_KV_DOMAIN_NAMESPACE_ID = process.env["CLOUDFLARE_KV_DOMAIN_NAMESPACE_ID"] || "";
-const CLOUDFLARE_KV_AUTH_TOKENS_NAMESPACE_ID = process.env["CLOUDFLARE_KV_AUTH_TOKENS_NAMESPACE_ID"] || "";
+if (!WORKER_URL) throw new Error("Unable to find WORKER_URL in environment");
+if (!WORKER_SECRET_TOKEN) throw new Error("Unable to find WORKER_SECRET_TOKEN in environment");
 
-if (!CLOUDFLARE_TOKEN) throw new Error("Unable to find CLOUDFLARE_TOKEN in environment");
-if (!CLOUDFLARE_ACCOUNT_ID) throw new Error("Unable to find CLOUDFLARE_ACCOUNT_ID in environment");
-if (!CLOUDFLARE_KV_DOMAIN_NAMESPACE_ID) throw new Error("Unable to find CLOUDFLARE_KV_DOMAIN_NAMESPACE_ID in environment");
-if (!CLOUDFLARE_KV_AUTH_TOKENS_NAMESPACE_ID) throw new Error("Unable to find CLOUDFLARE_KV_AUTH_TOKENS_NAMESPACE_ID in environment");
+enum Method {
+    Get = "GET",
+    Post = "POST"
+};
 
-const cloudflare = new Cloudflare({
-    token: CLOUDFLARE_TOKEN
-});
+async function request(endpoint: string, { method, body }: {
+    method?: Method,
+    body?: any
+} = { method: Method.Get, body: undefined }) {
+    try {
+        const res = await fetch(`${WORKER_URL}/_${endpoint}`, {
+            headers: {
+                "Authorization": `Bearer ${WORKER_SECRET_TOKEN}`
+            },
+            method,
+            body
+        });
+
+        return ({
+            body: await res.json(),
+            status: res.status
+        });
+    } catch (e) {
+        console.error("Problem making request to worker:");
+        console.error(e);
+
+        throw new Error("Error with request");
+    }
+}
 
 
-export function add_auth_token(user: string, token: string): Promise<{ success: boolean, error: string[], messages: string[] }> {
-    return cloudflare.enterpriseZoneWorkersKV.add(CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_KV_AUTH_TOKENS_NAMESPACE_ID, user, token) as any;
+export async function add_auth_token(user: string, token: string): Promise<boolean> {
+    let { status, body } = await request(`/kv/auth_tokens/${user}`, {
+        method: Method.Post,
+        body: token
+    });
+
+    return status === 200;
+}
+
+export async function redeem_referral_code(code: string, user: string): Promise<void> {
+    let { status, body } = await request(`/do/referral_code/${code}/use`, {
+        method: Method.Post,
+        body: user
+    });
+
+    if (status === 200) {
+        return;
+    } else {
+        throw new Error(body?.message || "Invalid response");
+    }
 }
 
