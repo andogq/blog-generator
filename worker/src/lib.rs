@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
+use cloudflare::CloudflareAPI;
 use graphql_client::GraphQLQuery;
 use handlebars::Handlebars;
 use pulldown_cmark::{Options, Parser};
 use serde_json::json;
 use worker::*;
 
+mod cloudflare;
 pub mod durable_objects;
 mod utils;
 
@@ -100,6 +102,27 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                     .unwrap_or_default();
                 if token == expected_server {
                     return match path.next().unwrap_or_default().as_str() {
+                        "cf" => {
+                            if let (
+                                Ok(cloudflare_token),
+                                Ok(cloudflare_zone_id),
+                                Ok(cloudflare_target),
+                            ) = (
+                                env.secret("CLOUDFLARE_TOKEN").map(|s| s.to_string()),
+                                env.secret("CLOUDFLARE_ZONE_ID").map(|s| s.to_string()),
+                                env.secret("CLOUDFLARE_TARGET").map(|s| s.to_string()),
+                            ) {
+                                let api = CloudflareAPI::new(
+                                    &cloudflare_zone_id,
+                                    &cloudflare_target,
+                                    &cloudflare_token,
+                                );
+
+                                api.route(Box::new(path), req).await
+                            } else {
+                                Response::error("Bad request", 400)
+                            }
+                        }
                         "kv" => {
                             if let (Some(store_name), Some(key)) = (path.next(), path.next()) {
                                 if let Ok(store) = env.kv(&store_name) {
