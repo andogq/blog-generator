@@ -1,3 +1,5 @@
+import prisma from "$lib/prisma";
+
 const WORKER_URL = process.env["WORKER_URL"] || "";
 const WORKER_SECRET_TOKEN = process.env["WORKER_SECRET_TOKEN"] || "";
 
@@ -35,8 +37,8 @@ async function request(endpoint: string, { method, body }: {
 }
 
 
-export async function add_auth_token(user: string, token: string): Promise<boolean> {
-    let { status, body } = await request(`/kv/auth_tokens/${user}`, {
+export async function add_auth_token(username: string, token: string): Promise<boolean> {
+    let { status, body } = await request(`/kv/auth_tokens/${username}`, {
         method: Method.Post,
         body: token
     });

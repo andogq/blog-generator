@@ -104,6 +104,11 @@ struct CloudflareCustomHostname {
     created_at: String,
 }
 
+#[derive(Deserialize, Clone)]
+struct CloudflareCustomHostnameId {
+    id: String,
+}
+
 #[derive(Serialize, Debug, Clone)]
 pub struct Record {
     record_type: String,
@@ -206,6 +211,17 @@ impl CloudflareAPI {
                     Response::error("Problem with request", 400)
                 }
             }
+            (Method::Delete, Some("hostname")) => {
+                if let Some(id) = path.next() {
+                    if self.remove_hostname(&id).await {
+                        Response::ok(json!({ "success": true }).to_string())
+                    } else {
+                        Response::error("Not found", 404)
+                    }
+                } else {
+                    Response::error("Problem with request", 400)
+                }
+            }
             (Method::Post, Some("hostname")) => {
                 if let Some(hostname) = path.next() {
                     if let Some(hostname) = self.add_hostname(&hostname).await {
@@ -280,6 +296,21 @@ impl CloudflareAPI {
         } else {
             None
         }
+    }
+
+    async fn remove_hostname(&self, hostname: &str) -> bool {
+        if let Some(hostname_id) = self
+            .fetch::<CloudflareCustomHostnameId>(
+                &format!("/custom_hostnames/{}", id),
+                Method::Delete,
+                None,
+            )
+            .await
+        {
+            return hostname_id.id == id;
+        }
+
+        false
     }
 
     async fn fetch<T: DeserializeOwned>(

@@ -1,5 +1,6 @@
 import { get_domain, link_domain } from "$lib/cloudflare";
 import type { RequestHandler } from "@sveltejs/kit";
+import prisma from "$lib/prisma";
 
 export const GET: RequestHandler = async ({ request, locals }) => {
     let { user } = locals;

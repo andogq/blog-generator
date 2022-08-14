@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Status {
+  ACTIVE
+  DELETED
+}
+
+model User {
+  id              String    @id @default(uuid())
+  username        String @unique
+  api_token       String?
+  s_referral_code String?   @map("referral_code")
+  date_created    DateTime  @default(now())
+  last_login      DateTime  @default(now())
+  status          Status    @default(ACTIVE)
+
+  domains                Domain[]
+  referral_code          ReferralCode?  @relation("RedeemedBy", fields: [s_referral_code], references: [code])
+  created_referral_codes ReferralCode[] @relation("CreatedBy")
+}
+
+model ReferralCode {
+  code         String   @id
+  s_creator    String?  @map("creator")
+  date_created DateTime @default(now())
+  count        Int
+  status       Status
+
+  creator User?  @relation("CreatedBy", fields: [s_creator], references: [id])
+  users   User[] @relation("RedeemedBy")
+}
+
+model Domain {
+  cloudflare_id   String   @id
+  domain          String
+  s_user          String
+  hostname_status String
+  ssl_status      String
+  date_added      DateTime @default(now())
+  date_updated    DateTime @default(now())
+  status          Status   @default(ACTIVE)
+
+  user User @relation(fields: [s_user], references: [id])
+}

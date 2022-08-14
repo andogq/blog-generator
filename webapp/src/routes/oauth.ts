@@ -2,6 +2,7 @@ import type { RequestHandler } from "@sveltejs/kit";
 import { add_auth_token } from "$lib/cloudflare";
 import { get_user } from "$lib/github";
 import { sign } from "$lib/jwt";
+import prisma from "$lib/prisma";
 
 export const GET: RequestHandler = async ({ url }) => {
     let code = url.searchParams.get("code");
@@ -25,13 +26,41 @@ export const GET: RequestHandler = async ({ url }) => {
                 }
             }).then(res => res.json()).catch(null);
 
-            let access_token = res?.access_token;
+            let api_token = res?.access_token;
 
-            if (access_token) {
-                let user = await get_user(access_token);
+            if (api_token) {
+                let user = await get_user(api_token);
 
                 if (user) {
-                    let response = await add_auth_token(user, access_token);
+                    let username: string = user.login;
+
+                    if (await prisma.user.findUnique({
+                        where: {
+                            username
+                        }
+                    })) {
+                        // Update user
+                        await prisma.user.update({
+                            where: {
+                                username
+                            },
+                            data: {
+                                api_token,
+                                last_login: new Date()
+                            }
+                        });
+                    } else {
+                        // Create user
+                        await prisma.user.create({
+                            data: {
+                                username: user.login,
+                                api_token
+                            }
+                        });
+                    }
+
+                    // Sync with KV store
+                    let response = await add_auth_token(user, api_token);
 
                     if (response) {
                         // Create JWT
