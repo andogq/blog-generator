@@ -19,7 +19,6 @@
         });
 
         if (response.status === 200) {
-            // TODO: Progress to next step
             $onboarding.step++;
         } else {
             error = (await response.json().catch(() => null))?.message || "Problem making request";

@@ -29,7 +29,6 @@
     }
 </script>
 
-<h1>hello</h1>
 <div id="scroll" bind:this={card_container}>
     <div class="spacer" />
     {#each [Referral, LinkDomain, VerifyDomain] as Card, i}
