@@ -1,5 +1,6 @@
 import type { RequestHandler } from "@sveltejs/kit";
 import prisma from "$lib/prisma";
+import { Status } from "@prisma/client";
 
 export const POST: RequestHandler = async ({ request, locals }) => {
     // Extract code from request
@@ -8,42 +9,56 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         .catch(() => null);
 
     if (code) {
-        let success = await prisma.$transaction(async prisma => {
-            // Check if referral code is valid
-            let referral_code = await prisma.referralCode.findUnique({
-                where: {
-                    code
-                },
-                select: {
-                    count: true,
-                    _count: {
-                        select: {
-                            users: true
-                        }
-                    }
-                }
-            });
-
-            if (referral_code && referral_code.count > referral_code._count.users) {
-                // Use code if it is
-                await prisma.user.update({
+        try {
+            await prisma.$transaction(async prisma => {
+                // Check if referral code is valid
+                let referral_code = await prisma.referralCode.findUnique({
                     where: {
-                        username: locals.user
+                        code
                     },
-                    data: {
-                        s_referral_code: code
+                    select: {
+                        count: true,
+                        status: true,
+                        _count: {
+                            select: {
+                                users: true
+                            }
+                        }
                     }
                 });
 
-                return true;
-            } else return false;
-        });
+                if (referral_code && referral_code.status == Status.ACTIVE && referral_code.count > referral_code._count.users) {
+                    // Use code if it is
+                    await prisma.user.update({
+                        where: {
+                            username: locals.user
+                        },
+                        data: {
+                            s_referral_code: code
+                        }
+                    });
+                } else throw new Error("Referral code as expired or has been redeemed");
+            });
 
-        return {
-            status: success ? 200 : 400,
-            headers: {},
-            body: {
-                success
+            return {
+                status: 200,
+                headers: {},
+                body: {
+                    message: "Referral code successfully redeemed"
+                }
+            }
+        } catch (error: unknown) {
+            let message = "Error while redeeming referral code";
+
+            if (error instanceof Error) message = error.message;
+            else if (typeof error === "string") message = error;
+
+            return {
+                status: 400,
+                headers: {},
+                body: {
+                    message
+                }
             }
         }
     } else return {

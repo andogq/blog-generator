@@ -174,6 +174,8 @@ Store this information in the database.
 
 2. Referral code
 
+[done]
+
 Allow user to input referral code. Verify referral code in database and add to
 user to redeem the referral code.
 
