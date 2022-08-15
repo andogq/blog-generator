@@ -6,12 +6,12 @@ const WORKER_SECRET_TOKEN = process.env["WORKER_SECRET_TOKEN"] || "";
 if (!WORKER_URL) throw new Error("Unable to find WORKER_URL in environment");
 if (!WORKER_SECRET_TOKEN) throw new Error("Unable to find WORKER_SECRET_TOKEN in environment");
 
-enum Method {
+export enum Method {
     Get = "GET",
     Post = "POST"
 };
 
-async function request(endpoint: string, { method, body }: {
+export async function request(endpoint: string, { method, body }: {
     method?: Method,
     body?: any
 } = { method: Method.Get, body: undefined }) {
@@ -59,7 +59,7 @@ export async function redeem_referral_code(code: string, user: string): Promise<
     }
 }
 
-type DomainDetails = {
+export type DomainDetails = {
 	id: string,
 	hostname: string,
 	dns_records: {

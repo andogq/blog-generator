@@ -181,6 +181,8 @@ user to redeem the referral code.
 
 3. Add domain
 
+[done]
+
 Allow user to input domain. Add domain to Cloudflare (via Worker), then store
 domain details in database.
 

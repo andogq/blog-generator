@@ -36,6 +36,7 @@ export const GET: RequestHandler = async ({ url }) => {
                     let username: string = user.login;
 
                     let destination: string;
+                    let id: string;
 
                     // Check if the user exists in the database
                     if (await prisma.user.findUnique({
@@ -44,7 +45,7 @@ export const GET: RequestHandler = async ({ url }) => {
                         }
                     })) {
                         // Update user (login)
-                        await prisma.user.update({
+                        let user = await prisma.user.update({
                             where: {
                                 username
                             },
@@ -54,21 +55,23 @@ export const GET: RequestHandler = async ({ url }) => {
                             }
                         });
 
+                        id = user.id;
                         destination = "/dashboard";
                     } else {
                         // Create user (register)
-                        await prisma.user.create({
+                        let new_user = await prisma.user.create({
                             data: {
                                 username: user.login,
                                 api_token
                             }
                         });
 
+                        id = new_user.id;
                         destination = "/onboarding";
                     }
 
                     // Create JWT
-                    let jwt = await sign(user.login);
+                    let jwt = await sign({ username: user.login, id });
 
                     // Redirect to destination (onboarding or dashboard)
                     return {

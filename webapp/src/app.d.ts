@@ -2,7 +2,10 @@
 
 declare namespace App {
     interface Locals {
-        user: string
+        user: {
+            id: string,
+            username: string
+        }
     }
 
     interface Platform {}

@@ -3,6 +3,16 @@ import prisma from "$lib/prisma";
 import { Status } from "@prisma/client";
 
 export const POST: RequestHandler = async ({ request, locals }) => {
+    let user = locals.user;
+
+    if (!user) return {
+        status: 403,
+        headers: {},
+        body: {
+            message: "Unauthorized"
+        }
+    }
+
     // Extract code from request
     let code = await request.json()
         .then(body => body?.code)
@@ -31,7 +41,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
                     // Use code if it is
                     await prisma.user.update({
                         where: {
-                            username: locals.user
+                            id: locals.user.id
                         },
                         data: {
                             s_referral_code: code
