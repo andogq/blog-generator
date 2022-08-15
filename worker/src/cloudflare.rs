@@ -298,8 +298,8 @@ impl CloudflareAPI {
         }
     }
 
-    async fn remove_hostname(&self, hostname: &str) -> bool {
-        if let Some(hostname_id) = self
+    async fn remove_hostname(&self, id: &str) -> bool {
+        if let Some(CloudflareCustomHostnameId { id: hostname_id }) = self
             .fetch::<CloudflareCustomHostnameId>(
                 &format!("/custom_hostnames/{}", id),
                 Method::Delete,
@@ -307,7 +307,7 @@ impl CloudflareAPI {
             )
             .await
         {
-            return hostname_id.id == id;
+            return hostname_id == id;
         }
 
         false

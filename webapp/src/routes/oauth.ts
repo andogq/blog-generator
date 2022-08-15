@@ -1,5 +1,4 @@
 import type { RequestHandler } from "@sveltejs/kit";
-import { add_auth_token } from "$lib/cloudflare";
 import { get_user } from "$lib/github";
 import { sign } from "$lib/jwt";
 import prisma from "$lib/prisma";
@@ -26,20 +25,25 @@ export const GET: RequestHandler = async ({ url }) => {
                 }
             }).then(res => res.json()).catch(null);
 
+            // Extract API token out of response
             let api_token = res?.access_token;
 
             if (api_token) {
+                // Get user information from GitHub
                 let user = await get_user(api_token);
 
                 if (user) {
                     let username: string = user.login;
 
+                    let destination: string;
+
+                    // Check if the user exists in the database
                     if (await prisma.user.findUnique({
                         where: {
                             username
                         }
                     })) {
-                        // Update user
+                        // Update user (login)
                         await prisma.user.update({
                             where: {
                                 username
@@ -49,40 +53,29 @@ export const GET: RequestHandler = async ({ url }) => {
                                 last_login: new Date()
                             }
                         });
+
+                        destination = "/dashboard";
                     } else {
-                        // Create user
+                        // Create user (register)
                         await prisma.user.create({
                             data: {
                                 username: user.login,
                                 api_token
                             }
                         });
+
+                        destination = "/onboarding";
                     }
 
-                    // Sync with KV store
-                    let response = await add_auth_token(user, api_token);
+                    // Create JWT
+                    let jwt = await sign(user.login);
 
-                    if (response) {
-                        // Create JWT
-                        let jwt = await sign(user);
-
-                        return {
-                            status: 303,
-                            headers: {
-                                "Set-Cookie": `auth_token=${jwt}`,
-                                "Location": "/onboarding"
-                            }
-                        }
-                    } else {
-                        console.error("Problem with cloudflare request");
-                        console.error(response);
-
-                        return {
-                            status: 500,
-                            headers: {},
-                            body: {
-                        
-                            }
+                    // Redirect to destination (onboarding or dashboard)
+                    return {
+                        status: 303,
+                        headers: {
+                            "Set-Cookie": `auth_token=${jwt}`,
+                            "Location": destination
                         }
                     }
                 } else {
@@ -90,7 +83,7 @@ export const GET: RequestHandler = async ({ url }) => {
                         status: 500,
                         headers: {},
                         body: {
-                    
+                            error: "Problem getting user data from GitHub"
                         }
                     }
                 }

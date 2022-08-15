@@ -167,6 +167,8 @@ extension KV, DO and APIs), and interacting with the database.
 
 1. Authenticate with GitHub
 
+[done]
+
 Perform authentication with GitHub to retrieve `api_token` and `username`.
 Store this information in the database.
 

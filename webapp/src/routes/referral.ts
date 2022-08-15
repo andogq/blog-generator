@@ -1,5 +1,5 @@
 import type { RequestHandler } from "@sveltejs/kit";
-import { redeem_referral_code } from "$lib/cloudflare";
+import prisma from "$lib/prisma";
 
 export const POST: RequestHandler = async ({ request, locals }) => {
     // Extract code from request
@@ -8,22 +8,42 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         .catch(() => null);
 
     if (code) {
-        // Attempt to get from KV store
-        let success = await redeem_referral_code(code, locals.user).then(() => true).catch(() => false);
+        let success = await prisma.$transaction(async prisma => {
+            // Check if referral code is valid
+            let referral_code = await prisma.referralCode.findUnique({
+                where: {
+                    code
+                },
+                select: {
+                    count: true,
+                    _count: {
+                        select: {
+                            users: true
+                        }
+                    }
+                }
+            });
 
-        if (success) {
-            return {
-                status: 200,
-                body: {
-                    message: "Referral code valid"
-                }
-            }
-        } else {
-            return {
-                status: 400,
-                body: {
-                    message: "Referral code invalid or already redeemed"
-                }
+            if (referral_code && referral_code.count > referral_code._count.users) {
+                // Use code if it is
+                await prisma.user.update({
+                    where: {
+                        username: locals.user
+                    },
+                    data: {
+                        s_referral_code: code
+                    }
+                });
+
+                return true;
+            } else return false;
+        });
+
+        return {
+            status: success ? 200 : 400,
+            headers: {},
+            body: {
+                success
             }
         }
     } else return {
