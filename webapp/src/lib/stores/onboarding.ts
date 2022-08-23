@@ -8,12 +8,16 @@ const store: Writable<{
         record_type: string,
         name: string,
         value: string
-    }[]
+    }[],
+    ssl_status: string,
+    verification_status: string
 }> = writable({
     step: 0,
     domain: "",
     domain_id: "",
-    verification_codes: []
+    verification_codes: [],
+    ssl_status: "",
+    verification_status: ""
 });
 
 export default store;

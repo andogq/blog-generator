@@ -25,6 +25,8 @@
         if (status === 200) {
             $onboarding.verification_codes = body.dns_records;
             $onboarding.domain_id = body.id;
+            $onboarding.ssl_status = body.ssl_status;
+            $onboarding.verification_status = body.verification_status;
             $onboarding.step++;
         } else {
             error = body;

@@ -22,17 +22,22 @@
         loading = true;
         timeout = 30;
 
-        let { status, body } = await fetch(`domain?id=${$onboarding.domain_id}`, {
+        let { body } = await fetch(`domain?id=${$onboarding.domain_id}`, {
             method: "GET"
         }).then(async res => ({
             status: res.status,
             body: await res.json().catch(() => ({}))
         }));
 
-        if (status === 200) {
+        $onboarding.ssl_status = body?.ssl_status || $onboarding.ssl_status;
+        $onboarding.verification_status = body?.verification_status || $onboarding.verification_status;
+
+        // Check to see if the verification status is appropriate
+        if (body?.verification_status === "active" && body?.ssl_status === "active") {
             go_to_account();
-        } else {
-            console.error(body);
+        } else if (body?.dns_records) {
+            // Refresh DNS records incase they've changed
+            $onboarding.verification_codes = body.dns_records;
         }
 
         loading = false;
@@ -40,6 +45,10 @@
 
     function go_to_account() {
         goto("/dashboard");
+    }
+
+    function prettify(text: string) {
+        return text.split("_").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
     }
 </script>
 
@@ -64,6 +73,9 @@
             {/each}
         </tbody>
     </table>
+
+    <p>Verification Status: <b>{prettify($onboarding.verification_status)}</b></p>
+    <p>SSL Status: <b>{prettify($onboarding.ssl_status)}</b></p>
 
     <button on:click={go_to_account}>Verify Later</button>
     <button default disabled={loading || timeout > 0} on:click={test_domain}>
