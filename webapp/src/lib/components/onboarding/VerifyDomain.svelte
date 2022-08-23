@@ -22,7 +22,7 @@
         loading = true;
         timeout = 30;
 
-        let { body } = await fetch(`domain?id=${$onboarding.domain_id}`, {
+        let { body } = await fetch(`domain/${$onboarding.domain_id}`, {
             method: "GET"
         }).then(async res => ({
             status: res.status,
@@ -74,14 +74,18 @@
         </tbody>
     </table>
 
-    <p>Verification Status: <b>{prettify($onboarding.verification_status)}</b></p>
-    <p>SSL Status: <b>{prettify($onboarding.ssl_status)}</b></p>
+    {#if $onboarding.verification_status}
+        <p>Verification Status: <b>{prettify($onboarding.verification_status)}</b></p>
+    {/if}
+    {#if $onboarding.ssl_status}
+        <p>SSL Status: <b>{prettify($onboarding.ssl_status)}</b></p>
+    {/if}
 
     <button on:click={go_to_account}>Verify Later</button>
     <button default disabled={loading || timeout > 0} on:click={test_domain}>
         Verify
         {#if timeout > 0}
-            (try again in {timeout} second{#if timeout === 1}s{/if})
+            (try again in {timeout} second{#if timeout !== 1}s{/if})
         {/if}
     </button>
 </Card>

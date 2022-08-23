@@ -188,6 +188,8 @@ domain details in database.
 
 4. Verify domain
 
+[done]
+
 Get domain verification details from Cloudflare (via Worker, this can be done
 in the previous step). Don't store them in the database, just present them to
 the user.

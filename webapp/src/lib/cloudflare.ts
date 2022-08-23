@@ -1,5 +1,3 @@
-import prisma from "$lib/prisma";
-
 const WORKER_URL = process.env["WORKER_URL"] || "";
 const WORKER_SECRET_TOKEN = process.env["WORKER_SECRET_TOKEN"] || "";
 
@@ -59,14 +57,16 @@ export async function redeem_referral_code(code: string, user: string): Promise<
     }
 }
 
+export type DomainRecord = {
+    record_type: string,
+    name: string,
+    value: string
+};
+
 export type DomainDetails = {
 	id: string,
 	hostname: string,
-	dns_records: {
-        record_type: string,
-        name: string,
-        value: string
-    }[],
+	dns_records: DomainRecord[],
 	verification_status: string,
 	ssl_status: string,
 	errors: string[]
@@ -79,25 +79,6 @@ export async function get_domain(id: string): Promise<DomainDetails> {
         return domain_details;
     } else {
         throw new Error(domain_details?.message || "Problem getting domain");
-    }
-}
-
-export async function link_domain(domain: string, user: string): Promise<DomainDetails> {
-    let { status, body: domain_details } = await request(`/cf/hostname/${domain}`, { method: Method.Post });
-
-    if (status === 200) {
-        let { status, body } = await request(`/kv/domains/${domain}`, {
-            method: Method.Post,
-            body: user
-        });
-
-        if (status === 200) {
-            return domain_details;
-        } else {
-            throw new Error(body?.message || "Problem setting domain");
-        }
-    } else { 
-        throw new Error(domain_details?.message || "Invalid response");
     }
 }
 
