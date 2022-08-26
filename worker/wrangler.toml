@@ -8,7 +8,6 @@ type="rust"
 
 kv_namespaces = [
     { binding = "domains", id = "f7a1938bff8841e8a588eb7b50a232fc", preview_id = "547898a5745448bd81f91fc0fae93ec1" },
-    { binding = "auth_tokens", id = "3a264f192d1f4eb69253aa85877b48eb", preview_id = "5bd5dc6353e04e7face63e3855ba99c2" }
 ]
 
 [vars]
@@ -27,9 +26,7 @@ type = "CompiledWasm"
 globs = ["**/*.wasm"]
 
 [durable_objects]
-bindings = [
-    { name = "REFERRAL_CODE", class_name = "ReferralToken" }
-]
+bindings = []
 
 [miniflare]
 durable_objects_persist = true

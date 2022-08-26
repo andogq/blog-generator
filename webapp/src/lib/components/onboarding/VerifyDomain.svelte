@@ -83,7 +83,7 @@
 
     <button on:click={go_to_account}>Verify Later</button>
     <button default disabled={loading || timeout > 0} on:click={test_domain}>
-        Verify
+        Check Verification
         {#if timeout > 0}
             (try again in {timeout} second{#if timeout !== 1}s{/if})
         {/if}

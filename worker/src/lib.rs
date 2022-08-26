@@ -73,7 +73,7 @@ type DateTime = String;
 struct Query;
 
 // TODO: pull from Cargo.toml
-const DURABLE_OBJECT_WHITELIST: &[&str] = &["referral_code"];
+const DURABLE_OBJECT_WHITELIST: &[&str] = &[];
 
 #[event(fetch)]
 pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
