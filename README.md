@@ -198,3 +198,19 @@ To check the verification, make a request to the Worker, to return the required
 records (if any), and the status. If the status is active, update the record in
 the database and make a request to the Worker to add to the KV store the
 domain, GitHub username and API token.
+
+# Authentication
+
+## JWT
+
+JWT will contain user ID (and maybe expiry?). It will be decoded in the
+SvelteKit `hook.ts`, verified and the user will be fetched from the database. The
+fetched user will be assigned to the locals for the request.
+
+## Client Side
+
+An endpoint will be available for the user that will return the information for
+the user that is currently logged in. This can be used to fill in user
+information in the UI, and as a starting location for other information like
+domains.
+

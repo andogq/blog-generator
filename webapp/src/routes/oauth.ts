@@ -71,7 +71,7 @@ export const GET: RequestHandler = async ({ url }) => {
                     }
 
                     // Create JWT
-                    let jwt = await sign({ username: user.login, id });
+                    let jwt = await sign(id);
 
                     // Redirect to destination (onboarding or dashboard)
                     return {

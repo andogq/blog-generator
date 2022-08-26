@@ -1,5 +1,6 @@
 import type { Handle } from "@sveltejs/kit";
 import { verify } from "$lib/jwt";
+import prisma from "$lib/prisma";
 
 export const handle: Handle = async ({ event, resolve }) => {
     let jwt = event.request.headers.get("cookie")
@@ -8,13 +9,21 @@ export const handle: Handle = async ({ event, resolve }) => {
         ?.split("=")
         ?.at(1) || null;
 
-    let remove_token_cookie = false;
+    let remove_token_cookie = true;
 
     if (jwt) {
-        let user = await verify(jwt);
+        try {
+            let user_id = await verify(jwt);
+            
+            let user = await prisma.user.findUniqueOrThrow({
+                where: {
+                    id: user_id
+                }
+            });
 
-        if (user) event.locals.user = user;
-        else remove_token_cookie = true;
+            event.locals.user = user;
+            remove_token_cookie = false;
+        } catch (_) {}
     }
 
     let response = await resolve(event);

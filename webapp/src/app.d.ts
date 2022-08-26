@@ -2,10 +2,7 @@
 
 declare namespace App {
     interface Locals {
-        user: {
-            id: string,
-            username: string
-        }
+        user: import("@prisma/client").User | null
     }
 
     interface Platform {}

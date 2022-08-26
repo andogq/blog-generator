@@ -1,14 +1,18 @@
 <script lang="ts">
-    let domains = [
-        {
-            domain: "ando.gq",
-            active: true
-        },
-        {
-            domain: "ando.sh",
-            active: false
-        }
-    ];
+    import { browser } from "$app/env";
+
+    let domains: any[] = [];
+
+    if (browser) {
+        fetch("/user")
+            .then(res => res.json())
+            .then(user => Promise.all(
+                user.domains.map((domain: string) => (
+                    fetch(`/domain/${domain}`).then(res => res.json())
+                ))
+            ))
+            .then(_domains => domains = _domains);
+    }
 </script>
 
 <h1>Domains</h1>
@@ -17,21 +21,19 @@
     <thead>
         <tr>
             <td>Domain</td>
-            <td>Status</td>
+            <td>Verification Status</td>
+            <td>SSL Status</td>
         </tr>
     </thead>
     <tbody>
     {#each domains as domain}
         <tr>
-            <td><a href="https://{domain.domain}">{domain.domain}</a></td>
+            <td><a href="https://{domain.hostname}">{domain.hostname}</a></td>
             <td>
-                {#if domain.active}
-                    Active
-                {:else}
-                    Pending Verification
-                    <!-- svelte-ignore a11y-missing-attribute -->
-                    <a>(retry)</a>
-                {/if}
+                {domain.verification_status}
+            </td>
+            <td>
+                {domain.ssl_status}
             </td>
         </tr>
     {/each}

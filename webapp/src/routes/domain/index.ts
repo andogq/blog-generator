@@ -1,8 +1,7 @@
-import { get_domain, Method } from "$lib/cloudflare";
+import { Method } from "$lib/cloudflare";
 import type { RequestHandler } from "@sveltejs/kit";
 import { request as cloudflare_request, type DomainDetails } from "$lib/cloudflare";
 import prisma from "$lib/prisma";
-
 
 export const POST: RequestHandler = async ({ request, locals }) => {
     let { user } = locals;
