@@ -6,7 +6,8 @@ if (!WORKER_SECRET_TOKEN) throw new Error("Unable to find WORKER_SECRET_TOKEN in
 
 export enum Method {
     Get = "GET",
-    Post = "POST"
+    Post = "POST",
+    Delete = "DELETE"
 };
 
 export async function request(endpoint: string, { method, body }: {
@@ -34,29 +35,6 @@ export async function request(endpoint: string, { method, body }: {
     }
 }
 
-
-export async function add_auth_token(username: string, token: string): Promise<boolean> {
-    let { status, body } = await request(`/kv/auth_tokens/${username}`, {
-        method: Method.Post,
-        body: token
-    });
-
-    return status === 200;
-}
-
-export async function redeem_referral_code(code: string, user: string): Promise<void> {
-    let { status, body } = await request(`/do/referral_code/${code}/use`, {
-        method: Method.Post,
-        body: user
-    });
-
-    if (status === 200) {
-        return;
-    } else {
-        throw new Error(body?.message || "Invalid response");
-    }
-}
-
 export type DomainRecord = {
     record_type: string,
     name: string,
@@ -79,6 +57,14 @@ export async function get_domain(id: string): Promise<DomainDetails> {
         return domain_details;
     } else {
         throw new Error(domain_details?.message || "Problem getting domain");
+    }
+}
+
+export async function remove_domain(id: string): Promise<void> {
+    let { status, body } = await request(`/cf/hostname/${id}`, { method: Method.Delete });
+
+    if (status !== 200) {
+        throw new Error(body?.message || "Problem deleting domain");
     }
 }
 

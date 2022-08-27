@@ -1,4 +1,5 @@
 import prisma from "$lib/prisma";
+import { Status } from "@prisma/client";
 import type { RequestHandler } from "@sveltejs/kit";
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -7,7 +8,8 @@ export const GET: RequestHandler = async ({ locals }) => {
     if (user) {
         let domains = await prisma.domain.findMany({
             where: {
-                user
+                user,
+                status: Status.ACTIVE
             },
             select: {
                 cloudflare_id: true,

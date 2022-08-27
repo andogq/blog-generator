@@ -143,6 +143,13 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                                                 None
                                             }
                                         }
+                                        Method::Delete => {
+                                            if store.delete(&key).await.is_ok() {
+                                                Some("{ \"ok\": true }".to_string())
+                                            } else {
+                                                None
+                                            }
+                                        }
                                         _ => None,
                                     } {
                                         return Response::ok(res);

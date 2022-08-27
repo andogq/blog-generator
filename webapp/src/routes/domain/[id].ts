@@ -1,5 +1,6 @@
-import { get_domain, type DomainRecord, Method, request as cf_request } from "$lib/cloudflare";
+import { get_domain, type DomainRecord, Method, request as cf_request, remove_domain } from "$lib/cloudflare";
 import prisma from "$lib/prisma";
+import { FeedbackType, Status } from "@prisma/client";
 import type { RequestHandler } from "./__types/[id]";
 
 export const GET: RequestHandler = async ({ request, params, locals }) => {
@@ -99,3 +100,97 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
         }
     }
 }
+
+export const DELETE: RequestHandler = async ({ request, params, locals }) => {
+    let { user } = locals;
+
+    // Make sure user is authenticated
+    if (!user) return {
+        status: 403,
+        headers: {},
+        body: {
+            message: "Unauthorized"
+        }
+    }
+
+    let id = params.id;
+
+    if (!id) return {
+        status: 400,
+        headers: {},
+        body: {
+            message: "Malformed request"
+        }
+    }
+
+    // Attempt to get domain details from the database
+    let domain = await prisma.domain.findUnique({
+        where: {
+            cloudflare_id: id
+        }
+    });
+
+    if (domain && domain.s_user === user.id) {
+        // Remove the domain from KV and Cloudflare
+        let [{ status }] = await Promise.all([
+            cf_request(`/kv/domains/${domain.domain}`, {
+                method: Method.Delete,
+            }),
+            remove_domain(domain.cloudflare_id)
+        ]);
+
+        if (status === 200) {
+            // Remove domain from DB
+            await prisma.domain.update({
+                where: {
+                    cloudflare_id: domain.cloudflare_id
+                },
+                data: {
+                    status: Status.DELETED,
+                    date_updated: new Date()
+                }
+            });
+
+            // Check if there's any feedback to submit
+            try {
+                let { feedback } = await request.json() || {}
+
+                if (typeof feedback === "string") {
+                    await prisma.feedback.create({
+                        data: {
+                            s_user: user.id,
+                            message: feedback,
+                            type: FeedbackType.DOMAIN_DELETE
+                        }
+                    });
+                }
+            } catch (_) {}
+
+            return {
+                status: 200,
+                headers: {},
+                body: {
+                    message: "Successfully removed domain"
+                }
+            }
+        } else {
+            return {
+                status: 500,
+                headers: {},
+                body: {
+                    message: "Problem removing domain"
+                }
+            }
+        }
+    } else {
+        // Domain doesn't exist
+        return {
+            status: 404,
+            headers: {},
+            body: {
+                message: "Domain does not exist"
+            }
+        }
+    }
+}
+

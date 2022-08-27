@@ -131,6 +131,11 @@ button:focus {
     outline: none;
 }
 
+/* Ensures that numbers are shown when in overflow hidden container */
+ol, ul {
+    margin-left: 2rem;
+}
+
 #app {
     height: 100%;
     width: 100%;

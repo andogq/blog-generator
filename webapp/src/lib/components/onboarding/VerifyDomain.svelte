@@ -2,6 +2,7 @@
     import Card from "./Card.svelte";
     import onboarding from "$lib/stores/onboarding";
     import { goto } from "$app/navigation";
+    import { prettify_text } from "$lib/helpers";
 
     let loading = false;
 
@@ -46,10 +47,6 @@
     function go_to_account() {
         goto("/dashboard");
     }
-
-    function prettify(text: string) {
-        return text.split("_").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
-    }
 </script>
 
 <Card name="Verify Domain">
@@ -75,10 +72,10 @@
     </table>
 
     {#if $onboarding.verification_status}
-        <p>Verification Status: <b>{prettify($onboarding.verification_status)}</b></p>
+        <p>Verification Status: <b>{prettify_text($onboarding.verification_status)}</b></p>
     {/if}
     {#if $onboarding.ssl_status}
-        <p>SSL Status: <b>{prettify($onboarding.ssl_status)}</b></p>
+        <p>SSL Status: <b>{prettify_text($onboarding.ssl_status)}</b></p>
     {/if}
 
     <button on:click={go_to_account}>Verify Later</button>

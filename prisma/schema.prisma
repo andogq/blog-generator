@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["interactiveTransactions"]
 }
 
@@ -16,18 +16,23 @@ enum Status {
   DELETED
 }
 
+enum FeedbackType {
+  DOMAIN_DELETE
+}
+
 model User {
-  id              String    @id @default(uuid())
-  username        String @unique
+  id              String   @id @default(uuid())
+  username        String   @unique
   api_token       String?
-  s_referral_code String?   @map("referral_code")
-  date_created    DateTime  @default(now())
-  last_login      DateTime  @default(now())
-  status          Status    @default(ACTIVE)
+  s_referral_code String?  @map("referral_code")
+  date_created    DateTime @default(now())
+  last_login      DateTime @default(now())
+  status          Status   @default(ACTIVE)
 
   domains                Domain[]
   referral_code          ReferralCode?  @relation("RedeemedBy", fields: [s_referral_code], references: [code])
   created_referral_codes ReferralCode[] @relation("CreatedBy")
+  submitted_feedback     Feedback[]
 }
 
 model ReferralCode {
@@ -50,6 +55,16 @@ model Domain {
   date_added      DateTime @default(now())
   date_updated    DateTime @default(now())
   status          Status   @default(ACTIVE)
+
+  user User @relation(fields: [s_user], references: [id])
+}
+
+model Feedback {
+  id           String       @id @default(uuid())
+  s_user       String
+  date_created DateTime @default(now())
+  message      String
+  type         FeedbackType
 
   user User @relation(fields: [s_user], references: [id])
 }
