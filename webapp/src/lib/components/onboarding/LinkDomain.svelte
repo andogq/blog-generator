@@ -1,5 +1,4 @@
 <script lang="ts">
-    import Card from "./Card.svelte";
     import Input from "$lib/components/Input.svelte";
     import onboarding from "$lib/stores/onboarding";
 
@@ -36,14 +35,14 @@
     }
 </script>
 
-<Card name="Link Domain">
-    <p>Enter the domain you would like to use below.</p>
+<h1>Link Domain</h1>
 
-    <Input label="Domain" placeholder="www.example.com" bind:value={$onboarding.domain} />
+<p>Enter the domain you would like to use below.</p>
 
-    {#if error}
-        <p>{error}</p>
-    {/if}
-    
-    <button default on:click={link_domain} disabled={loading || !valid_domain}>Next</button>
-</Card>
+<Input label="Domain" placeholder="www.example.com" bind:value={$onboarding.domain} />
+
+{#if error}
+    <p>{error}</p>
+{/if}
+
+<button default on:click={link_domain} disabled={loading || !valid_domain}>Next</button>

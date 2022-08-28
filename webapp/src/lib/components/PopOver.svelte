@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { fade } from "svelte/transition";
+    import Portal from "./Portal.svelte";
 
     export let title: string;
     export let open: boolean;
@@ -14,25 +15,27 @@
 </script>
 
 {#if open}
-    <div
-        id="shadow"
-        on:click|self={on_close}
-        transition:fade={{ duration: 100 }}
-    >
-        <div id="container" style:width>
-            <h1 id="title">{title}</h1>
+    <Portal>
+        <div
+            id="shadow"
+            on:click|self={on_close}
+            transition:fade={{ duration: 100 }}
+        >
+            <div id="container" style:width>
+                <h1 id="title">{title}</h1>
 
-            <div id="content">
-                <slot />
-            </div>
+                <div id="content">
+                    <slot />
+                </div>
 
-            <div id="buttons">
-                <slot name="buttons">
-                <button on:click={on_close}>Close</button>
-                </slot>
+                <div id="buttons">
+                    <slot name="buttons">
+                    <button on:click={on_close}>Close</button>
+                    </slot>
+                </div>
             </div>
         </div>
-    </div>
+    </Portal>
 {/if}
 
 <style>

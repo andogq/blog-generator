@@ -1,6 +1,5 @@
 <script lang="ts">
     import onboarding from "$lib/stores/onboarding";
-    import Card from "$lib/components/onboarding/Card.svelte";
     import Input from "$lib/components/Input.svelte";
 
     let loading = false;
@@ -28,15 +27,15 @@
     }
 </script>
 
-<Card name="Referral Code">
-    <p>Enter your referral code to get started.</p>
+<h1>Referral Code</h1>
 
-    <Input label="Referral Code" placeholder="very_secret_code" bind:value={code}/>
+<p>Enter your referral code to get started.</p>
 
-    {#if error}
-        <p>{error}</p>
-    {/if}
+<Input label="Referral Code" placeholder="very_secret_code" bind:value={code}/>
 
-    <button default on:click={redeem_code} disabled={loading || code.length == 0}>Next</button>
-</Card>
+{#if error}
+    <p>{error}</p>
+{/if}
+
+<button default on:click={redeem_code} disabled={loading || code.length == 0}>Next</button>
 

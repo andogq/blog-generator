@@ -1,5 +1,4 @@
 <script lang="ts">
-    import Card from "./Card.svelte";
     import onboarding from "$lib/stores/onboarding";
     import { goto } from "$app/navigation";
     import { prettify_text } from "$lib/helpers";
@@ -50,27 +49,27 @@
     }
 </script>
 
-<Card name="Verify Domain">
-    <p>To verify your ownership of the domain, add the following DNS records then click 'Verify'</p>
+<h1>Verify Domain</h1>
 
-    {#if $onboarding.verification_status}
-        <p>Verification Status: <b>{prettify_text($onboarding.verification_status)}</b></p>
+<p>To verify your ownership of the domain, add the following DNS records then click 'Verify'</p>
+
+{#if $onboarding.verification_status}
+    <p>Verification Status: <b>{prettify_text($onboarding.verification_status)}</b></p>
+{/if}
+{#if $onboarding.ssl_status}
+    <p>SSL Status: <b>{prettify_text($onboarding.ssl_status)}</b></p>
+{/if}
+
+<DnsRecordTable
+    records={$onboarding.verification_codes}
+    {loading}
+    disable_refresh
+/>
+
+<button on:click={go_to_account}>Verify Later</button>
+<button default disabled={loading || timeout > 0} on:click={test_domain}>
+    Check Verification
+    {#if timeout > 0}
+        (try again in {timeout} second{#if timeout !== 1}s{/if})
     {/if}
-    {#if $onboarding.ssl_status}
-        <p>SSL Status: <b>{prettify_text($onboarding.ssl_status)}</b></p>
-    {/if}
-
-    <DnsRecordTable
-        records={$onboarding.verification_codes}
-        {loading}
-        disable_refresh
-    />
-
-    <button on:click={go_to_account}>Verify Later</button>
-    <button default disabled={loading || timeout > 0} on:click={test_domain}>
-        Check Verification
-        {#if timeout > 0}
-            (try again in {timeout} second{#if timeout !== 1}s{/if})
-        {/if}
-    </button>
-</Card>
+</button>
