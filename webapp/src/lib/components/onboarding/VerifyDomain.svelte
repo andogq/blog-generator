@@ -3,6 +3,7 @@
     import onboarding from "$lib/stores/onboarding";
     import { goto } from "$app/navigation";
     import { prettify_text } from "$lib/helpers";
+    import DnsRecordTable from "$lib/components/DnsRecordTable.svelte";
 
     let loading = false;
 
@@ -52,31 +53,18 @@
 <Card name="Verify Domain">
     <p>To verify your ownership of the domain, add the following DNS records then click 'Verify'</p>
 
-    <table>
-        <thead>
-            <tr>
-                <td>Record Type</td>
-                <td>Record Name</td>
-                <td>Record Content</td>
-            </tr>
-        </thead>
-        <tbody>
-            {#each $onboarding.verification_codes as record}
-                <tr>
-                    <td>{record.record_type}</td>
-                    <td>{record.name}</td>
-                    <td>{record.value}</td>
-                </tr>
-            {/each}
-        </tbody>
-    </table>
-
     {#if $onboarding.verification_status}
         <p>Verification Status: <b>{prettify_text($onboarding.verification_status)}</b></p>
     {/if}
     {#if $onboarding.ssl_status}
         <p>SSL Status: <b>{prettify_text($onboarding.ssl_status)}</b></p>
     {/if}
+
+    <DnsRecordTable
+        records={$onboarding.verification_codes}
+        {loading}
+        disable_refresh
+    />
 
     <button on:click={go_to_account}>Verify Later</button>
     <button default disabled={loading || timeout > 0} on:click={test_domain}>

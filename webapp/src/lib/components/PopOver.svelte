@@ -28,7 +28,7 @@
 
             <div id="buttons">
                 <slot name="buttons">
-                <button default on:click={on_close}>Close</button>
+                <button on:click={on_close}>Close</button>
                 </slot>
             </div>
         </div>
@@ -65,7 +65,8 @@
     #content {
         margin: 0 1rem;
 
-        overflow: scroll;
+        overflow-y: scroll;
+        overflow-x: hidden;
 
         display: flex;
         flex-direction: column;

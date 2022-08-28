@@ -5,6 +5,8 @@
     import { prettify_text } from "$lib/helpers";
     import { expand } from "$lib/transitions";
 
+    import DnsRecordTable from "$lib/components/DnsRecordTable.svelte";
+
     type DnsRecord = {
         record_type: string,
         name: string,
@@ -122,27 +124,12 @@
             <p>SSL Status: <b>{prettify_text(managed_domain.ssl_status)}</b></p>
         </div>
 
-        {#if managed_domain.dns_records.length > 0}
-            <h3>Verification</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <td>Record Type</td>
-                        <td>Record Name</td>
-                        <td>Record Content</td>
-                    </tr>
-                </thead>
-                <tbody>
-                    {#each managed_domain.dns_records as record}
-                        <tr>
-                            <td>{record.record_type}</td>
-                            <td>{record.name}</td>
-                            <td>{record.value}</td>
-                        </tr>
-                    {/each}
-                </tbody>
-            </table>
-        {/if}
+        <h3>Verification</h3>
+        <DnsRecordTable
+            records={managed_domain.dns_records}
+            {loading}
+            on:refresh={refresh_domains}
+        />
 
         <h3>Danger Zone</h3>
 
