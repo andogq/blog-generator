@@ -23,6 +23,9 @@
     padding: 0;
 
     box-sizing: border-box;
+}
+
+*:not(code) {
     font-family: 'Montserrat', sans-serif;
 }
 
