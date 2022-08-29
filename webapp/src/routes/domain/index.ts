@@ -6,8 +6,8 @@ import prisma from "$lib/prisma";
 export const POST: RequestHandler = async ({ request, locals }) => {
     let { user } = locals;
 
-    // Make sure user is authenticated
-    if (!user) return {
+    // Make sure user is authenticated and has a valid referral code
+    if (!user || user.s_referral_code === null) return {
         status: 403,
         headers: {},
         body: {
@@ -25,8 +25,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
             message: "Malformed request"
         }
     }
-
-    // TODO: Make sure user has valid referral code
 
     try {
         // Make request with Cloudflare (via worker)

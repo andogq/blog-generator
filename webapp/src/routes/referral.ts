@@ -3,15 +3,15 @@ import prisma from "$lib/prisma";
 import { Status } from "@prisma/client";
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-    let user = locals.user;
-
-    if (!user) return {
+    if (locals.user === null) return {
         status: 403,
         headers: {},
         body: {
             message: "Unauthorized"
         }
     }
+
+    let user = locals.user;
 
     // Extract code from request
     let code = await request.json()
@@ -41,10 +41,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
                     // Use code if it is
                     await prisma.user.update({
                         where: {
-                            id: locals.user.id
+                            id: user.id
                         },
                         data: {
-                            s_referral_code: code
+                            s_referral_code: code,
+                            referral_waiting: false // Clear the flag that they're waiting for a referral code
                         }
                     });
                 } else throw new Error("Referral code as expired or has been redeemed");

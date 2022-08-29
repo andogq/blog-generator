@@ -62,6 +62,7 @@ export const GET: RequestHandler = async ({ url }) => {
                         let new_user = await prisma.user.create({
                             data: {
                                 username: user.login,
+                                email: user.email,
                                 api_token
                             }
                         });

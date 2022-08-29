@@ -21,13 +21,15 @@ enum FeedbackType {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  username        String   @unique
-  api_token       String?
-  s_referral_code String?  @map("referral_code")
-  date_created    DateTime @default(now())
-  last_login      DateTime @default(now())
-  status          Status   @default(ACTIVE)
+  id               String   @id @default(uuid())
+  username         String   @unique
+  email            String?
+  api_token        String?
+  s_referral_code  String?  @map("referral_code")
+  date_created     DateTime @default(now())
+  last_login       DateTime @default(now())
+  status           Status   @default(ACTIVE)
+  referral_waiting Boolean  @default(false)
 
   domains                Domain[]
   referral_code          ReferralCode?  @relation("RedeemedBy", fields: [s_referral_code], references: [code])
@@ -62,7 +64,7 @@ model Domain {
 model Feedback {
   id           String       @id @default(uuid())
   s_user       String
-  date_created DateTime @default(now())
+  date_created DateTime     @default(now())
   message      String
   type         FeedbackType
 
