@@ -1,6 +1,7 @@
-import { get_domain, type DomainRecord, Method, request as cf_request, remove_domain } from "$lib/cloudflare";
+import { get_domain, Method, request as cf_request, remove_domain } from "$lib/cloudflare";
+import type { DomainRecord } from "$lib/cloudflare";
+
 import prisma from "$lib/prisma";
-import { FeedbackType, Status } from "@prisma/client";
 import type { RequestHandler } from "./__types/[id]";
 
 export const GET: RequestHandler = async ({ request, params, locals }) => {
@@ -60,7 +61,7 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
                 if (domain.ssl_status === "active" && domain.hostname_status === "active") {
                     let { status } = await cf_request(`/kv/domains/${domain.domain}`, {
                         method: Method.Post,
-                        body: user.username
+                        body: `${user.username},${user.api_token}`
                     });
                     
                     if (status !== 200) throw new Error(`Status adding domain ${domain.domain} to store: ${status}`);

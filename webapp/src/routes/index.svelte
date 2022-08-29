@@ -4,7 +4,8 @@
     const GITHUB_OAUTH_URL = new URL("https://github.com/login/oauth/authorize");
     GITHUB_OAUTH_URL.search = new URLSearchParams({
         client_id: import.meta.env.VITE_GITHUB_CLIENT_ID,
-        redirect_uri: new URL("/oauth", $page.url.origin).href
+        redirect_uri: new URL("/oauth", $page.url.origin).href,
+        scope: ["read:user", "user:email"].join(" ")
     }).toString();
 </script>
 
