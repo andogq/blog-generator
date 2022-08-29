@@ -1,7 +1,6 @@
 name = "github_blog"
 workers_dev = true
 
-main = "build/worker/shim.mjs"
 compatibility_date = "2022-01-20"
 
 type="rust"
@@ -12,6 +11,8 @@ kv_namespaces = [
 
 [vars]
 WORKERS_RS_VERSION = "0.0.9"
+CLOUDFLARE_ZONE_ID = "c96c9b355eaee37d02f76ffcb71f43b5"
+CLOUDFLARE_TARGET = "https://api.cloudflare.com/client/v4"
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"

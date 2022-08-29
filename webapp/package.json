@@ -29,5 +29,8 @@
 		"cloudflare": "^2.9.1",
 		"dotenv": "^16.0.1",
 		"jose": "^4.8.3"
-	}
+	},
+    "prisma": {
+        "schema": "../prisma/schema.prisma"
+    }
 }
