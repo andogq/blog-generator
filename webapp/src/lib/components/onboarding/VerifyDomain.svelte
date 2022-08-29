@@ -51,7 +51,7 @@
 
 <h1>Verify Domain</h1>
 
-<p>To verify your ownership of the domain, add the following DNS records then click 'Verify'</p>
+<p>To verify your ownership of the domain, add the following DNS records then click 'Check Verification'.</p>
 
 {#if $onboarding.verification_status}
     <p>Verification Status: <b>{prettify_text($onboarding.verification_status)}</b></p>

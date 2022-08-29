@@ -4,13 +4,13 @@
 
     import LinkDomain from "$lib/components/onboarding/LinkDomain.svelte";
     import Referral from "$lib/components/onboarding/Referral.svelte";
+    import AddCname from "$lib/components/onboarding/AddCNAME.svelte";
     import VerifyDomain from "$lib/components/onboarding/VerifyDomain.svelte";
-
 </script>
 
 <div id="container">
     <Scroll
-        items={[Referral, LinkDomain, VerifyDomain]}
+        items={[Referral, LinkDomain, AddCname, VerifyDomain]}
         bind:step={$onboarding.step}
         navigation={{
             click: false,
