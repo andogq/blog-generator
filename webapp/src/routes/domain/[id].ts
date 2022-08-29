@@ -155,11 +155,11 @@ export const DELETE: RequestHandler = async ({ request, params, locals }) => {
             try {
                 let { feedback } = await request.json() || {}
 
-                if (typeof feedback === "string") {
+                if (typeof feedback === "string" && feedback.trim().length > 0) {
                     await prisma.feedback.create({
                         data: {
                             s_user: user.id,
-                            message: feedback,
+                            message: feedback.trim(),
                             type: FeedbackType.DOMAIN_DELETE
                         }
                     });
