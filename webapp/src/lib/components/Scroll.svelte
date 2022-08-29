@@ -1,7 +1,8 @@
 <script lang="ts">
     import { onMount, type ComponentType } from "svelte";
 
-    const WHEEL_THRESHOLD = 50;
+    const WHEEL_THRESHOLD = 100;
+    const RESET_TIMEOUT = 500;
 
     export let items: ComponentType[];
     export let step = 0;
@@ -49,7 +50,7 @@
 
             reset_timeout = setTimeout(() => {
                 dy = 0;
-            }, 250);
+            }, RESET_TIMEOUT);
         }
     }
     
