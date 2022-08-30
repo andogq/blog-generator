@@ -186,7 +186,9 @@
             "homepage": "https://example.com",
             "stargazers": 10,
             "forks": 10,
-            "github_url": "https://github.com/andogq/some_repo"
+            "github_url": "https://github.com/andogq/some_repo",
+            "uses_custom_image": true,
+            "image_url": "https://repository-images.githubusercontent.com/000000/0000-0000-00-000000"
         }
     ],
     "post": { // Only present if loading a post

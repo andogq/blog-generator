@@ -25,6 +25,8 @@ query Query($user: String!, $post: Int!, $posts: Int!) {
           github_url: url
           forkCount
           stargazerCount
+          image_url: openGraphImageUrl
+          uses_custom_image: usesCustomOpenGraphImage
           languages(first: 5) {
             nodes {
               name

@@ -356,7 +356,7 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                                     .unwrap_or_default()
                                     .into_iter()
                                     .filter_map(
-                                        |pinned| if let Some(query::QueryUserPinnedItemsNodes::Repository(query::QueryUserPinnedItemsNodesOnRepository {name,description,homepage_url,github_url,languages:Some(languages), fork_count, stargazer_count })) = pinned {
+                                        |pinned| if let Some(query::QueryUserPinnedItemsNodes::Repository(query::QueryUserPinnedItemsNodesOnRepository {name,description,homepage_url,github_url,languages:Some(languages), fork_count, stargazer_count, uses_custom_image, image_url })) = pinned {
                                             Some(json!({
                                                 "name": name,
                                                 "description": description,
@@ -368,7 +368,9 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
                                                 "homepage": homepage_url,
                                                 "stargazers": stargazer_count,
                                                 "forks": fork_count,
-                                                "github_url": github_url
+                                                "github_url": github_url,
+                                                "uses_custom_image": uses_custom_image,
+                                                "image_url": image_url
                                             }))
                                         } else { None }
                                     )
