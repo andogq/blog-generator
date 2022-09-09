@@ -4,8 +4,10 @@ node_modules
 **/*.rs.bk
 wasm-pack.log
 
-build/
-/worker/target
+worker/build/
+worker/target/
+scripts/build/
+scripts/target/
 dist
 
 worker/.mf

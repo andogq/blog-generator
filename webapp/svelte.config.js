@@ -2,7 +2,10 @@ import adapter from '@sveltejs/adapter-auto';
 import preprocess from 'svelte-preprocess';
 import dotenv from "dotenv";
 
-dotenv.config();
+// TODO: Replace this with bulit-in env in new sveltekit version
+dotenv.config({
+    path: "../.env.dev"
+});
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {

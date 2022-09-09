@@ -1,7 +1,7 @@
 import * as jose from "jose";
 
-const JWT_SECRET = process.env["JWT_SECRET"] || "";
-if (!JWT_SECRET) throw new Error("JWT_SECRET not found in environment");
+const JWT_SECRET = process.env["AUTH_JWT_SECRET"] || "";
+if (!JWT_SECRET) throw new Error("AUTH_JWT_SECRET not found in environment");
 
 const SECRET = Uint8Array.from(Buffer.from(JWT_SECRET, "base64"));
 
