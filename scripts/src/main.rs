@@ -1,13 +1,12 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     env, fs,
-    io::{Stdout, Write},
+    io::Write,
     process::{Command, Stdio},
 };
 
-use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
-use toml::Value;
+mod vercel;
+use vercel::VercelClient;
 
 const ENV_FILE: &str = "../.env.dev";
 const WRANGLER_FILE: &str = "../worker/wrangler.toml";
@@ -24,15 +23,14 @@ impl Config {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-struct PartialWrangler {
-    #[serde(flatten)]
-    extras: IndexMap<String, Value>,
-
-    vars: HashMap<String, String>,
+struct Variable {
+    pub key: String,
+    pub value: String,
+    pub public: bool,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     if let Some(command) = env::args().nth(1) {
         let config = Config::new();
 
@@ -40,77 +38,116 @@ fn main() {
         println!("Reading env file");
         let env_file = fs::read_to_string(ENV_FILE).expect("Couldn't open env file");
 
-        // Open wrangler file
-        println!("Reading wrangler file");
-        let original_wrangler_file =
-            &fs::read_to_string(WRANGLER_FILE).expect("Couldn't open wrangler.toml file");
+        let variables: HashMap<String, Variable> = env_file
+            .lines()
+            .filter_map(|line| {
+                if !(line.starts_with('#') || line.trim().is_empty()) {
+                    if let Some((key, value)) = line.split_once('=') {
+                        return Some((
+                            key.to_string(),
+                            Variable {
+                                key: key.to_string(),
+                                value: value.to_string(),
+                                public: key.starts_with("PUBLIC_"),
+                            },
+                        ));
+                    }
+                }
 
-        let mut wrangler_file: PartialWrangler =
-            toml::from_str(original_wrangler_file).expect("Problem parsing wrangler.toml file");
+                None
+            })
+            .collect();
 
         match command.as_str() {
             "deploy" => {
                 println!("Running deploy");
 
-                for line in env_file
-                    .lines()
-                    .filter(|line| !(line.starts_with('#') || line.trim().is_empty()))
-                {
-                    if let Some((key, value)) = line.split_once('=') {
-                        if key.starts_with("PUBLIC_") {
-                            println!("Found public variable {}", key);
+                let (vercel_token, vercel_project_id) = (
+                    &variables
+                        .get("VERCEL_TOKEN")
+                        .expect("VERCEL_TOKEN missing from env file")
+                        .value,
+                    &variables
+                        .get("VERCEL_PROJECT_ID")
+                        .expect("VERCEL_PROJECT_ID missing from env file")
+                        .value,
+                );
 
-                            // Add to wrangler file
-                            wrangler_file
-                                .vars
-                                .insert(key.to_string(), value.to_string());
-                        } else {
-                            println!("Found private variable {}", key);
+                // Prepare Vercel client
+                let api_client = VercelClient::new(vercel_token, vercel_project_id)
+                    .expect("Problem setting up Vercel client");
 
-                            if config.upload_secrets {
-                                // Run wrangler secret put
-                                let mut wrangler_command = Command::new("wrangler")
-                                    .args(["-c", WRANGLER_FILE])
-                                    .args(["secret", "put"])
-                                    .arg(key)
-                                    .stdin(Stdio::piped())
-                                    .stdout(Stdio::piped())
-                                    .stderr(Stdio::piped())
-                                    .spawn()
-                                    .expect("Problem launching wrangler command");
+                let vercel_variables = api_client
+                    .list_variables()
+                    .await
+                    .expect("Problem fetching Vercel variables");
 
-                                wrangler_command
-                                    .stdin
-                                    .take()
-                                    .expect("Failed to open stdin")
-                                    .write_all(value.as_bytes())
-                                    .expect("Failed to write to stdin");
+                for variable in variables.values() {
+                    // Cloudflare
+                    if !variable.public && config.upload_secrets {
+                        // Run wrangler secret put
+                        let mut wrangler_command = Command::new("wrangler")
+                            .args(["-c", WRANGLER_FILE])
+                            .args(["secret", "put"])
+                            .arg(&variable.key)
+                            .stdin(Stdio::piped())
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()
+                            .expect("Problem launching wrangler command");
 
-                                let output = wrangler_command
-                                    .wait_with_output()
-                                    .expect("Failed to get output");
-                                if !output.status.success() {
-                                    println!("Error running `wrangler secret put {}`", key);
-                                }
-                            }
+                        wrangler_command
+                            .stdin
+                            .take()
+                            .expect("Failed to open stdin")
+                            .write_all(variable.value.as_bytes())
+                            .expect("Failed to write to stdin");
+
+                        let output = wrangler_command
+                            .wait_with_output()
+                            .expect("Failed to get output");
+                        if !output.status.success() {
+                            println!("Error running `wrangler secret put {}`", &variable.key);
+                        }
+                    }
+
+                    // Vercel
+                    if let Some(matching_variable) =
+                        vercel_variables.iter().find(|var| var.key == variable.key)
+                    {
+                        // Edit existing variable
+                        if let Err(e) = api_client
+                            .edit_variable(&matching_variable.id, &variable.value)
+                            .await
+                        {
+                            println!(
+                                "Problem uploading variable {} to Vercel: {:?}",
+                                variable.key, e
+                            );
+                        }
+                    } else {
+                        // Create new variable
+                        if let Err(e) = api_client
+                            .create_variable(&variable.key, &variable.value)
+                            .await
+                        {
+                            println!(
+                                "Problem uploading variable {} to Vercel: {:?}",
+                                variable.key, e
+                            );
                         }
                     }
                 }
 
-                // Write to wrangler file
-                println!("Adding variables to wrangler file");
-                fs::write(
-                    WRANGLER_FILE,
-                    toml::to_string(&wrangler_file).expect("Problem serializing wrangler file"),
-                )
-                .expect("Problem writing to wrangler file");
-
-                // Publish with wrangler cli
+                // Publish with wrangler CLI
                 println!("Publishing with wrangler");
                 let wrangler_command = Command::new("wrangler")
                     .current_dir(fs::canonicalize("../worker").expect("path"))
-                    .args(["-c", WRANGLER_FILE])
                     .arg("publish")
+                    .args(["-c", WRANGLER_FILE])
+                    .args(variables.values().filter(|var| var.public).flat_map(|var| {
+                        ["--var".to_string(), format!("{}:{}", var.key, var.value)]
+                    }))
                     .status()
                     .expect("Problem launching wrangler publish");
 
@@ -119,11 +156,6 @@ fn main() {
                 } else {
                     println!("Problem running wrangler publish");
                 }
-
-                // Restore wrangler file
-                println!("Restoring wrangler file");
-                fs::write(WRANGLER_FILE, &original_wrangler_file)
-                    .expect("Problem writing to wrangler file");
             }
             "dev" => {}
             _ => {}
