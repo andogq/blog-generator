@@ -10,3 +10,5 @@ dist
 
 worker/.mf
 worker/.dev.vars
+
+.env.dev
