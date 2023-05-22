@@ -126,4 +126,17 @@ impl Provider for GithubProvider {
     async fn oauth_callback(&self, code: &str) -> std::result::Result<String, ProviderError> {
         Ok(self.oauth_callback(code).await?)
     }
+
+    fn get_oauth_link(&self) -> String {
+        Url::parse_with_params(
+            "https://github.com/login/oauth/authorize",
+            [
+                ("scope", "read:user"),
+                ("client_id", &self.client_id),
+                ("redirect_uri", "http://localhost:3000/auth/github/callback"),
+            ],
+        )
+        .unwrap()
+        .to_string()
+    }
 }

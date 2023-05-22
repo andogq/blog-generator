@@ -86,28 +86,44 @@ async fn main() -> Result<(), BackendError> {
 
     let router = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
-        .route("/auth/:provider", get(|| async move {
-            Html(
-                format!(r#"<a href="https://github.com/login/oauth/authorize?scope=read:user&client_id={}&redirect_uri=http:%2F%2Flocalhost:3000%2Fauth%2Fgithub%2Fcallback">Click to auth</a>"#, config.github_client_id)
-            )
-        }))
-        .route("/auth/:provider/callback", get(|Path(provider_name): Path<String>, code: Query<OAuthCode>, providers: State<AppState>| async move {
-            if let Some(provider) = providers.get(provider_name.as_str()) {
-                match provider.oauth_callback(&code.code).await {
-                    Ok(access_token) => {
-                        Json(json!({
-                            "access_token": access_token
-                        })).into_response()
+        .route(
+            "/auth/:provider",
+            get(
+                |Path(provider_name): Path<String>, providers: State<AppState>| async move {
+                    if let Some(provider) = providers.get(provider_name.as_str()) {
+                        Html(format!(
+                            r#"<a href="{}"> Click to auth</a>"#,
+                            provider.get_oauth_link()
+                        ))
+                        .into_response()
+                    } else {
+                        StatusCode::NOT_FOUND.into_response()
                     }
-                    Err(e) => {
-                        eprintln!("{e}");
-                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                },
+            ),
+        )
+        .route(
+            "/auth/:provider/callback",
+            get(
+                |Path(provider_name): Path<String>,
+                 code: Query<OAuthCode>,
+                 providers: State<AppState>| async move {
+                    if let Some(provider) = providers.get(provider_name.as_str()) {
+                        match provider.oauth_callback(&code.code).await {
+                            Ok(access_token) => {
+                                Json(json!({ "access_token": access_token })).into_response()
+                            }
+                            Err(e) => {
+                                eprintln!("{e}");
+                                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                            }
+                        }
+                    } else {
+                        StatusCode::NOT_FOUND.into_response()
                     }
-                }
-            } else {
-                StatusCode::NOT_FOUND.into_response()
-            }
-        }))
+                },
+            ),
+        )
         .route(
             "/:provider/:user",
             get(
