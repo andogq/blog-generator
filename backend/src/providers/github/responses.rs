@@ -1,4 +1,4 @@
-use crate::providers::{UserInformation, ExternalSite};
+use crate::providers::{ExternalSite, UserInformation};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -37,4 +37,11 @@ impl From<GetUserResponse> for UserInformation {
             company: response.company,
         }
     }
+}
+
+#[derive(Deserialize)]
+pub struct OAuthAccessTokenResponse {
+    pub access_token: String,
+    pub scope: String,
+    pub token_type: String,
 }

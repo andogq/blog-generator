@@ -1,13 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
 use axum::{
-    extract::{Path, State},
-    response::IntoResponse,
+    extract::{Path, Query, State},
+    response::{Html, IntoResponse},
     routing::get,
     Json, Router, Server,
 };
 use providers::github::GithubProviderError;
 use reqwest::StatusCode;
+use serde::Deserialize;
+use serde_json::json;
 use thiserror::Error;
 
 use crate::providers::{github, Provider};
@@ -30,7 +32,7 @@ enum ConfigError {
     MissingEnvVar(String),
 }
 struct Config {
-    github_token: String,
+    github_client_secret: String,
     github_client_id: String,
     github_api: String,
 }
@@ -43,11 +45,16 @@ impl Config {
         }
 
         Ok(Self {
-            github_token: var!("GITHUB_CLIENT_SECRET"),
+            github_client_secret: var!("GITHUB_CLIENT_SECRET"),
             github_client_id: var!("GITHUB_CLIENT_ID"),
             github_api: var!("GITHUB_API"),
         })
     }
+}
+
+#[derive(Deserialize)]
+struct OAuthCode {
+    code: String,
 }
 
 #[tokio::main]
@@ -67,21 +74,45 @@ async fn main() -> Result<(), BackendError> {
         "github".to_string(),
         Box::new(github::GithubProvider::new(
             &config.github_api,
-            &config.github_token,
+            &config.github_client_id,
+            &config.github_client_secret,
         )?) as Box<dyn Provider>,
     )]
     .into_iter()
     .collect();
 
     let providers = Arc::new(providers);
+    type AppState = Arc<HashMap<String, Box<dyn Provider>>>;
 
     let router = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
+        .route("/auth/:provider", get(|| async move {
+            Html(
+                format!(r#"<a href="https://github.com/login/oauth/authorize?scope=read:user&client_id={}&redirect_uri=http:%2F%2Flocalhost:3000%2Fauth%2Fgithub%2Fcallback">Click to auth</a>"#, config.github_client_id)
+            )
+        }))
+        .route("/auth/:provider/callback", get(|Path(provider_name): Path<String>, code: Query<OAuthCode>, providers: State<AppState>| async move {
+            if let Some(provider) = providers.get(provider_name.as_str()) {
+                match provider.oauth_callback(&code.code).await {
+                    Ok(access_token) => {
+                        Json(json!({
+                            "access_token": access_token
+                        })).into_response()
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                    }
+                }
+            } else {
+                StatusCode::NOT_FOUND.into_response()
+            }
+        }))
         .route(
             "/:provider/:user",
             get(
                 |Path((provider_name, user)): Path<(String, String)>,
-                 providers: State<Arc<HashMap<String, Box<dyn Provider>>>>| async move {
+                 providers: State<AppState>| async move {
                     if let Some(provider) = providers.get(provider_name.as_str()) {
                         match provider.get_user(&user).await {
                             Ok(Some(user_info)) => Json(user_info).into_response(),
