@@ -1,5 +1,7 @@
 mod responses;
 
+use std::collections::HashMap;
+
 use self::responses::*;
 use super::{Provider, ProviderError, UserInformation};
 use axum::{
@@ -25,6 +27,8 @@ pub enum GithubProviderError {
     Reqwest(#[from] reqwest::Error),
     #[error("OAuth error: {0}")]
     OAuth(String),
+    #[error("unauthenticated user")]
+    UnauthenticatedUser,
 }
 type Result<T> = std::result::Result<T, GithubProviderError>;
 
@@ -36,6 +40,8 @@ pub struct GithubProvider {
     client_secret: String,
 
     client: Client,
+
+    access_tokens: HashMap<String, String>,
 }
 
 impl GithubProvider {
@@ -47,18 +53,17 @@ impl GithubProvider {
 
             client: Client::builder()
                 .default_headers(
-                    [
-                        (header::ACCEPT, "application/vnd.github+json"),
-                        (header::AUTHORIZATION, client_secret),
-                    ]
-                    .into_iter()
-                    .map(|(header, value)| -> Result<(HeaderName, HeaderValue)> {
-                        Ok((header, HeaderValue::from_str(value)?))
-                    })
-                    .collect::<Result<HeaderMap>>()?,
+                    [(header::ACCEPT, "application/vnd.github+json")]
+                        .into_iter()
+                        .map(|(header, value)| -> Result<(HeaderName, HeaderValue)> {
+                            Ok((header, HeaderValue::from_str(value)?))
+                        })
+                        .collect::<Result<HeaderMap>>()?,
                 )
                 .user_agent(APP_USER_AGENT)
                 .build()?,
+
+            access_tokens: HashMap::new(),
         })
     }
 
@@ -66,6 +71,12 @@ impl GithubProvider {
         let response = self
             .client
             .get(self.api_base.join(&format!("/users/{username}"))?)
+            .header(
+                header::AUTHORIZATION,
+                self.access_tokens
+                    .get(username)
+                    .ok_or(GithubProviderError::UnauthenticatedUser)?,
+            )
             .send()
             .await?;
 
@@ -76,8 +87,8 @@ impl GithubProvider {
         })
     }
 
-    async fn oauth_callback(&self, code: &str) -> Result<String> {
-        let mut request = self
+    async fn oauth_callback(&mut self, code: &str) -> Result<()> {
+        let request = self
             .client
             .post("https://github.com/login/oauth/access_token")
             .json(&json!({
@@ -86,9 +97,6 @@ impl GithubProvider {
                 "code": code
             }))
             .build()?;
-
-        // Remove auth header since it's for a different origin
-        request.headers_mut().remove(header::AUTHORIZATION);
 
         // Make the request
         let response = self.client.execute(request).await?;
@@ -107,7 +115,14 @@ impl GithubProvider {
                 .send()
                 .await?;
 
-            Ok(response.text().await?)
+            if response.status().is_success() {
+                let user_info = response.json::<GetUserResponse>().await?;
+                self.access_tokens.insert(user_info.login, access_token);
+
+                Ok(())
+            } else {
+                Err(GithubProviderError::OAuth("unable to request user".into()))
+            }
         } else {
             Err(GithubProviderError::OAuth(response.text().await?))
         }
@@ -123,7 +138,7 @@ impl Provider for GithubProvider {
         Ok(self.get_user(username).await?)
     }
 
-    async fn oauth_callback(&self, code: &str) -> std::result::Result<String, ProviderError> {
+    async fn oauth_callback(&mut self, code: &str) -> std::result::Result<(), ProviderError> {
         Ok(self.oauth_callback(code).await?)
     }
 

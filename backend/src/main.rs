@@ -11,6 +11,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::json;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::providers::{github, Provider};
 
@@ -81,8 +82,8 @@ async fn main() -> Result<(), BackendError> {
     .into_iter()
     .collect();
 
-    let providers = Arc::new(providers);
-    type AppState = Arc<HashMap<String, Box<dyn Provider>>>;
+    let providers = Arc::new(Mutex::new(providers));
+    type AppState = Arc<Mutex<HashMap<String, Box<dyn Provider>>>>;
 
     let router = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
@@ -90,7 +91,7 @@ async fn main() -> Result<(), BackendError> {
             "/auth/:provider",
             get(
                 |Path(provider_name): Path<String>, providers: State<AppState>| async move {
-                    if let Some(provider) = providers.get(provider_name.as_str()) {
+                    if let Some(provider) = providers.lock().await.get(provider_name.as_str()) {
                         Html(format!(
                             r#"<a href="{}"> Click to auth</a>"#,
                             provider.get_oauth_link()
@@ -108,11 +109,9 @@ async fn main() -> Result<(), BackendError> {
                 |Path(provider_name): Path<String>,
                  code: Query<OAuthCode>,
                  providers: State<AppState>| async move {
-                    if let Some(provider) = providers.get(provider_name.as_str()) {
+                    if let Some(provider) = providers.lock().await.get_mut(provider_name.as_str()) {
                         match provider.oauth_callback(&code.code).await {
-                            Ok(access_token) => {
-                                Json(json!({ "access_token": access_token })).into_response()
-                            }
+                            Ok(()) => StatusCode::OK.into_response(),
                             Err(e) => {
                                 eprintln!("{e}");
                                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -129,7 +128,7 @@ async fn main() -> Result<(), BackendError> {
             get(
                 |Path((provider_name, user)): Path<(String, String)>,
                  providers: State<AppState>| async move {
-                    if let Some(provider) = providers.get(provider_name.as_str()) {
+                    if let Some(provider) = providers.lock().await.get(provider_name.as_str()) {
                         match provider.get_user(&user).await {
                             Ok(Some(user_info)) => Json(user_info).into_response(),
                             Ok(None) => StatusCode::NOT_FOUND.into_response(),

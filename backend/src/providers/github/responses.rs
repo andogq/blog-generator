@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct GetUserResponse {
+    pub login: String,
     avatar_url: String,
     html_url: String,
     name: Option<String>,

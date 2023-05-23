@@ -39,6 +39,6 @@ pub enum ProviderError {
 #[async_trait]
 pub trait Provider: Send + Sync {
     async fn get_user(&self, user: &str) -> Result<Option<UserInformation>, ProviderError>;
-    async fn oauth_callback(&self, code: &str) -> Result<String, ProviderError>;
+    async fn oauth_callback(&mut self, code: &str) -> Result<(), ProviderError>;
     fn get_oauth_link(&self) -> String;
 }
