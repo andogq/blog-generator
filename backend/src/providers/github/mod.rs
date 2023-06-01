@@ -3,7 +3,7 @@ mod responses;
 use std::collections::HashMap;
 
 use self::responses::*;
-use super::{Provider, ProviderError, UserInformation};
+use super::{Project, Provider, ProviderError, UserInformation};
 use axum::{
     async_trait,
     http::{HeaderMap, HeaderName, HeaderValue},
@@ -14,6 +14,7 @@ use reqwest::{
 };
 use serde_json::json;
 use thiserror::Error;
+use url::UrlQuery;
 
 #[derive(Debug, Error)]
 pub enum GithubProviderError {
@@ -29,6 +30,8 @@ pub enum GithubProviderError {
     OAuth(String),
     #[error("unauthenticated user")]
     UnauthenticatedUser,
+    #[error("search error: {0}")]
+    Search(String),
 }
 type Result<T> = std::result::Result<T, GithubProviderError>;
 
@@ -73,9 +76,12 @@ impl GithubProvider {
             .get(self.api_base.join(&format!("/users/{username}"))?)
             .header(
                 header::AUTHORIZATION,
-                self.access_tokens
-                    .get(username)
-                    .ok_or(GithubProviderError::UnauthenticatedUser)?,
+                format!(
+                    "Bearer {}",
+                    self.access_tokens
+                        .get(username)
+                        .ok_or(GithubProviderError::UnauthenticatedUser)?
+                ),
             )
             .send()
             .await?;
@@ -127,6 +133,40 @@ impl GithubProvider {
             Err(GithubProviderError::OAuth(response.text().await?))
         }
     }
+
+    async fn get_repositories(&self, username: &str) -> Result<Vec<Project>> {
+        let mut url = self.api_base.join("/search/repositories")?;
+        url.query_pairs_mut()
+            .append_pair("q", &["user:@me", "topic:portfolio"].join(" "));
+
+        let response = self
+            .client
+            .get(url)
+            .header(
+                header::AUTHORIZATION,
+                format!(
+                    "Bearer {}",
+                    self.access_tokens
+                        .get(username)
+                        .ok_or(GithubProviderError::UnauthenticatedUser)?
+                ),
+            )
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            // Parse the result
+            let response = response.json::<SearchRepositoriesResponse>().await?;
+
+            if response.incomplete_results {
+                todo!("fetch rest of repository results");
+            } else {
+                Ok(response.items.into_iter().map(Project::from).collect())
+            }
+        } else {
+            Err(GithubProviderError::Search(response.text().await?))
+        }
+    }
 }
 
 #[async_trait]
@@ -138,6 +178,13 @@ impl Provider for GithubProvider {
         Ok(self.get_user(username).await?)
     }
 
+    async fn get_projects(
+        &self,
+        username: &str,
+    ) -> std::result::Result<Vec<Project>, ProviderError> {
+        Ok(self.get_repositories(username).await?)
+    }
+
     async fn oauth_callback(&mut self, code: &str) -> std::result::Result<(), ProviderError> {
         Ok(self.oauth_callback(code).await?)
     }
@@ -146,7 +193,7 @@ impl Provider for GithubProvider {
         Url::parse_with_params(
             "https://github.com/login/oauth/authorize",
             [
-                ("scope", "read:user"),
+                ("scope", ["read:user", "repo"].join(" ").as_str()),
                 ("client_id", &self.client_id),
                 ("redirect_uri", "http://localhost:3000/auth/github/callback"),
             ],

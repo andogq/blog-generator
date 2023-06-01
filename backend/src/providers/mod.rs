@@ -30,6 +30,25 @@ pub struct UserInformation {
     company: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct RepoStats {
+    stars: usize,
+    forks: usize,
+    watchers: usize,
+    issues: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Project {
+    name: String,
+    description: Option<String>,
+    url: Option<String>,
+    repo_url: Option<String>,
+    repo_stats: Option<RepoStats>,
+    tags: Vec<String>,
+    languages: Option<Vec<String>>,
+}
+
 #[derive(Debug, Error)]
 pub enum ProviderError {
     #[error("Github error: {0}")]
@@ -39,6 +58,7 @@ pub enum ProviderError {
 #[async_trait]
 pub trait Provider: Send + Sync {
     async fn get_user(&self, user: &str) -> Result<Option<UserInformation>, ProviderError>;
+    async fn get_projects(&self, user: &str) -> Result<Vec<Project>, ProviderError>;
     async fn oauth_callback(&mut self, code: &str) -> Result<(), ProviderError>;
     fn get_oauth_link(&self) -> String;
 }

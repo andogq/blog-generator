@@ -1,5 +1,3 @@
-use std::{collections::HashMap, sync::Arc};
-
 use axum::{
     extract::{Path, Query, State},
     response::{Html, IntoResponse},
@@ -10,6 +8,7 @@ use providers::github::GithubProviderError;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::json;
+use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -129,11 +128,22 @@ async fn main() -> Result<(), BackendError> {
                 |Path((provider_name, user)): Path<(String, String)>,
                  providers: State<AppState>| async move {
                     if let Some(provider) = providers.lock().await.get(provider_name.as_str()) {
-                        match provider.get_user(&user).await {
-                            Ok(Some(user_info)) => Json(user_info).into_response(),
-                            Ok(None) => StatusCode::NOT_FOUND.into_response(),
-                            Err(e) => {
-                                eprintln!("{e}");
+                        match (
+                            provider.get_user(&user).await,
+                            provider.get_projects(&user).await,
+                        ) {
+                            (Ok(Some(user_info)), Ok(projects)) => Json(json!({
+                                "user": user_info,
+                                "projects": projects
+                            }))
+                            .into_response(),
+                            (Ok(None), _) => StatusCode::NOT_FOUND.into_response(),
+                            (Err(e), _) => {
+                                eprintln!("user info error: {e}");
+                                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                            }
+                            (_, Err(e)) => {
+                                eprintln!("projects error: {e}");
                                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
                             }
                         }
