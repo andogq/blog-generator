@@ -12,13 +12,17 @@ use reqwest::{
     Client, StatusCode,
 };
 use serde::Deserialize;
-use serde_json::json;
-use shared::source::auth::{AuthIdentifier, AuthSource};
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
+use shared::source::auth::{AuthIdentifier, AuthSource};
+
 use crate::{
-    rest_api::responses::{GetUserResponse, OAuthAccessTokenResponse},
+    api::{
+        oauth::{generate_redirect_url, get_access_token, Scope},
+        rest::get_user,
+        GithubApiError,
+    },
     GithubConfig,
 };
 
@@ -46,14 +50,12 @@ struct AuthState {
 enum OAuthHandlerError {
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
-    #[error("non-200 status code from Github: {0}")]
-    GithubError(StatusCode),
-    #[error("unknown body response from Github: {0}")]
-    InvalidBody(reqwest::Error),
     #[error("channel error")]
     Channel,
     #[error("url parse error: {0}")]
     UrlParse(#[from] url::ParseError),
+    #[error("Github API error: {0}")]
+    GithubApi(#[from] GithubApiError),
 }
 impl IntoResponse for OAuthHandlerError {
     fn into_response(self) -> axum::response::Response {
@@ -105,50 +107,16 @@ async fn handle_oauth(
     State(state): State<AuthState>,
     params: Query<OauthQueryParams>,
 ) -> Result<StatusCode, OAuthHandlerError> {
-    let request = state
-        .client
-        .post(state.config.oauth_base.join("access_token")?)
-        .json(&json!({
-            "client_id": *state.config.client_id,
-            "client_secret": *state.config.client_secret,
-            "code": params.code
-        }))
-        .build()
-        .map_err(OAuthHandlerError::Reqwest)?;
+    let access_token = get_access_token(
+        state.client.clone(),
+        &state.config.client_id,
+        &state.config.client_secret,
+        &params.code,
+    )
+    .await?
+    .access_token;
 
-    let response = state
-        .client
-        .execute(request)
-        .await
-        .map_err(OAuthHandlerError::Reqwest)?;
-
-    if !response.status().is_success() {
-        return Err(OAuthHandlerError::GithubError(response.status()));
-    }
-
-    let access_token = response
-        .json::<OAuthAccessTokenResponse>()
-        .await
-        .map_err(OAuthHandlerError::InvalidBody)?
-        .access_token;
-
-    // Get user information
-    let response = state
-        .client
-        .get(state.config.api_base.join("user")?)
-        .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
-        .send()
-        .await
-        .map_err(OAuthHandlerError::Reqwest)?;
-
-    if !response.status().is_success() {
-        return Err(OAuthHandlerError::GithubError(response.status()));
-    }
-
-    let user_info = response
-        .json::<GetUserResponse>()
-        .await
-        .map_err(OAuthHandlerError::InvalidBody)?;
+    let user_info = get_user(state.client.clone(), &access_token).await?;
 
     state
         .save_auth_token
@@ -163,12 +131,11 @@ async fn handle_oauth(
 }
 
 async fn handle_redirect(State(state): State<AuthState>) -> Result<Redirect, OAuthHandlerError> {
-    let mut redirect_url = state.config.oauth_base.join("authorize")?;
-    redirect_url.query_pairs_mut().extend_pairs([
-        ("scope", ["read:user", "repo"].join(" ").as_str()),
-        ("client_id", &state.config.client_id),
-        ("redirect_uri", "http://localhost:3000/auth/github/oauth"),
-    ]);
-
-    Ok(Redirect::temporary(redirect_url.as_ref()))
+    generate_redirect_url(
+        &state.config.client_id,
+        &[Scope::ReadUser, Scope::Repo],
+        "http://localhost:3000/auth/github/oauth",
+    )
+    .map(|url| Redirect::temporary(url.as_ref()))
+    .map_err(OAuthHandlerError::UrlParse)
 }
