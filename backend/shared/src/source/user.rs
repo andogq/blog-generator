@@ -2,6 +2,8 @@ use axum::async_trait;
 use serde::Serialize;
 use std::collections::HashMap;
 
+use super::IdentifiableSource;
+
 #[derive(Debug, Serialize)]
 pub struct UserInformation {
     name: Option<String>,
@@ -17,6 +19,6 @@ pub struct UserInformation {
 }
 
 #[async_trait]
-pub trait UserSource {
+pub trait UserSource: IdentifiableSource {
     async fn get_user(&self, username: &str, auth_token: &str) -> UserInformation;
 }

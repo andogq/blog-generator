@@ -2,7 +2,6 @@ use axum::Router;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
-use self::auth::AuthIdentifier;
 pub use self::{auth::AuthSource, project::ProjectsSource, user::UserSource};
 
 pub mod auth;
@@ -20,13 +19,13 @@ impl SourceCollection {
     pub fn build_router(
         &mut self,
         user_agent: &str,
-        save_auth_token: UnboundedSender<(AuthIdentifier, String, String)>,
+        save_auth_token: UnboundedSender<(String, String, String)>,
     ) -> Router {
         std::mem::take(&mut self.auth)
             .into_iter()
             .fold(Router::new(), |router, auth_source| {
                 router.nest(
-                    &format!("/{}", *auth_source.get_identifier()),
+                    &format!("/{}", auth_source.get_identifier()),
                     auth_source.register_routes(user_agent, save_auth_token.clone()),
                 )
             })
@@ -55,4 +54,8 @@ pub enum SourceError {
 
 pub trait Source {
     fn get_sources(&self) -> SourceCollection;
+}
+
+pub trait IdentifiableSource {
+    fn get_identifier(&self) -> String;
 }

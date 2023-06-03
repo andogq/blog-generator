@@ -36,7 +36,9 @@ impl GithubConfig {
 impl Source for Github {
     fn get_sources(&self) -> SourceCollection {
         SourceCollection {
-            auth: vec![Box::new(GithubOAuth::new(&self.config)) as Box<dyn AuthSource>],
+            auth: vec![
+                Box::new(GithubOAuth::new("github_oauth", &self.config)) as Box<dyn AuthSource>
+            ],
             user: vec![],
             project: vec![],
         }

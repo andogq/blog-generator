@@ -4,7 +4,6 @@ use axum::extract::Path;
 use axum::{routing::get, Router, Server};
 use serde::Deserialize;
 use shared::environment::Environment;
-use shared::source::auth::AuthIdentifier;
 use shared::source::{Source, SourceCollection, SourceError};
 use thiserror::Error;
 use tokio::{
@@ -47,12 +46,9 @@ async fn main() -> Result<(), BackendError> {
         .map(|source| source.get_sources())
         .collect::<SourceCollection>();
 
-    let authentication_storage = Arc::new(RwLock::new(
-        HashMap::<(AuthIdentifier, String), String>::new(),
-    ));
+    let authentication_storage = Arc::new(RwLock::new(HashMap::<(String, String), String>::new()));
 
-    let (save_auth_token, mut save_auth_token_rx) =
-        unbounded_channel::<(AuthIdentifier, String, String)>();
+    let (save_auth_token, mut save_auth_token_rx) = unbounded_channel::<(String, String, String)>();
     {
         let authentication_storage = Arc::clone(&authentication_storage);
         task::spawn(async move {
@@ -75,7 +71,7 @@ async fn main() -> Result<(), BackendError> {
                 let auth_token = authentication_storage
                     .read()
                     .await
-                    .get(&(AuthIdentifier::new(&params.source), params.username.clone()))
+                    .get(&(params.source.clone(), params.username.clone()))
                     .cloned();
 
                 format!(

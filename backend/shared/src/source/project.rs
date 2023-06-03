@@ -1,1 +1,3 @@
-pub trait ProjectsSource {}
+use super::IdentifiableSource;
+
+pub trait ProjectsSource: IdentifiableSource {}

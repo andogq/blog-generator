@@ -15,7 +15,7 @@ use serde::Deserialize;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
-use shared::source::auth::{AuthIdentifier, AuthSource};
+use shared::source::{auth::AuthSource, IdentifiableSource};
 
 use crate::{
     api::{
@@ -27,12 +27,14 @@ use crate::{
 };
 
 pub struct GithubOAuth {
+    identifier: String,
     config: GithubConfig,
 }
 
 impl GithubOAuth {
-    pub fn new(config: &GithubConfig) -> Self {
+    pub fn new(identifier: &str, config: &GithubConfig) -> Self {
         Self {
+            identifier: identifier.to_string(),
             config: config.clone(),
         }
     }
@@ -41,9 +43,9 @@ impl GithubOAuth {
 #[derive(Clone)]
 struct AuthState {
     client: Client,
-    save_auth_token: UnboundedSender<(AuthIdentifier, String, String)>,
+    save_auth_token: UnboundedSender<(String, String, String)>,
     config: Arc<GithubConfig>,
-    identifier: Arc<AuthIdentifier>,
+    identifier: Arc<String>,
 }
 
 #[derive(Debug, Error)]
@@ -64,15 +66,17 @@ impl IntoResponse for OAuthHandlerError {
     }
 }
 
-impl AuthSource for GithubOAuth {
-    fn get_identifier(&self) -> AuthIdentifier {
-        AuthIdentifier::new("github")
+impl IdentifiableSource for GithubOAuth {
+    fn get_identifier(&self) -> String {
+        self.identifier.to_string()
     }
+}
 
+impl AuthSource for GithubOAuth {
     fn register_routes(
         &self,
         user_agent: &str,
-        save_auth_token: UnboundedSender<(AuthIdentifier, String, String)>,
+        save_auth_token: UnboundedSender<(String, String, String)>,
     ) -> Router {
         let state = AuthState {
             client: Client::builder()
@@ -88,7 +92,7 @@ impl AuthSource for GithubOAuth {
                 .unwrap(),
             save_auth_token,
             config: Arc::new(self.config.clone()),
-            identifier: Arc::new(self.get_identifier()),
+            identifier: Arc::new(self.identifier.clone()),
         };
 
         Router::new()
@@ -120,11 +124,7 @@ async fn handle_oauth(
 
     state
         .save_auth_token
-        .send((
-            state.identifier.as_ref().clone(),
-            user_info.login,
-            access_token,
-        ))
+        .send((state.identifier.to_string(), user_info.login, access_token))
         .map_err(|_| OAuthHandlerError::Channel)?;
 
     Ok(StatusCode::OK)
