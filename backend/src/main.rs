@@ -1,60 +1,33 @@
-use axum::{
-    extract::{Path, Query, State},
-    response::{Html, IntoResponse},
-    routing::get,
-    Json, Router, Server,
-};
-use providers::github::GithubProviderError;
-use reqwest::StatusCode;
-use serde::Deserialize;
-use serde_json::json;
 use std::{collections::HashMap, sync::Arc};
+
+use axum::extract::Path;
+use axum::{routing::get, Router, Server};
+use serde::Deserialize;
+use shared::environment::Environment;
+use shared::source::auth::AuthIdentifier;
+use shared::source::{Source, SourceCollection, SourceError};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::{
+    sync::{mpsc::unbounded_channel, RwLock},
+    task,
+};
 
-use crate::providers::{github, Provider};
+use github::Github;
 
-mod providers;
+static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 #[derive(Debug, Error)]
 enum BackendError {
     #[error("loading env file with dotenvy failed: {0}")]
     DotEnv(#[from] dotenvy::Error),
-    #[error("config generation failed: {0}")]
-    Config(#[from] ConfigError),
-    #[error("Github error: {0}")]
-    Github(#[from] GithubProviderError),
-}
-
-#[derive(Debug, Error)]
-enum ConfigError {
-    #[error("missing env var {0}")]
-    MissingEnvVar(String),
-}
-struct Config {
-    github_client_secret: String,
-    github_client_id: String,
-    github_api: String,
-}
-impl Config {
-    pub fn new() -> Result<Self, ConfigError> {
-        macro_rules! var {
-            ($name:expr) => {
-                std::env::var($name).map_err(|_| ConfigError::MissingEnvVar($name.to_string()))?
-            };
-        }
-
-        Ok(Self {
-            github_client_secret: var!("GITHUB_CLIENT_SECRET"),
-            github_client_id: var!("GITHUB_CLIENT_ID"),
-            github_api: var!("GITHUB_API"),
-        })
-    }
+    #[error("source error: {0}")]
+    Source(#[from] SourceError),
 }
 
 #[derive(Deserialize)]
-struct OAuthCode {
-    code: String,
+struct UserRequestPath {
+    source: String,
+    username: String,
 }
 
 #[tokio::main]
@@ -67,93 +40,54 @@ async fn main() -> Result<(), BackendError> {
         dotenvy::from_filename("../.env.dev")?;
     }
 
-    let config = Config::new()?;
-    println!("Config successfully loaded");
+    let environment: Environment = std::env::vars().collect();
 
-    let providers: HashMap<String, Box<dyn Provider>> = [(
-        "github".to_string(),
-        Box::new(github::GithubProvider::new(
-            &config.github_api,
-            &config.github_client_id,
-            &config.github_client_secret,
-        )?) as Box<dyn Provider>,
-    )]
-    .into_iter()
-    .collect();
+    let mut sources = [Box::new(Github::from_environment(&environment)?) as Box<dyn Source>]
+        .into_iter()
+        .map(|source| source.get_sources())
+        .collect::<SourceCollection>();
 
-    let providers = Arc::new(Mutex::new(providers));
-    type AppState = Arc<Mutex<HashMap<String, Box<dyn Provider>>>>;
+    let authentication_storage = Arc::new(RwLock::new(
+        HashMap::<(AuthIdentifier, String), String>::new(),
+    ));
+
+    let (save_auth_token, mut save_auth_token_rx) =
+        unbounded_channel::<(AuthIdentifier, String, String)>();
+    {
+        let authentication_storage = Arc::clone(&authentication_storage);
+        task::spawn(async move {
+            while let Some((identifier, username, auth_token)) = save_auth_token_rx.recv().await {
+                println!("New auth: {username}:{auth_token}");
+                authentication_storage
+                    .write()
+                    .await
+                    .insert((identifier, username), auth_token);
+            }
+        });
+    }
 
     let router = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
         .route(
-            "/auth/:provider",
-            get(
-                |Path(provider_name): Path<String>, providers: State<AppState>| async move {
-                    if let Some(provider) = providers.lock().await.get(provider_name.as_str()) {
-                        Html(format!(
-                            r#"<a href="{}"> Click to auth</a>"#,
-                            provider.get_oauth_link()
-                        ))
-                        .into_response()
-                    } else {
-                        StatusCode::NOT_FOUND.into_response()
-                    }
-                },
-            ),
+            "/:source/:username",
+            get(|Path(params): Path<UserRequestPath>| async move {
+                // todo
+                let auth_token = authentication_storage
+                    .read()
+                    .await
+                    .get(&(AuthIdentifier::new(&params.source), params.username.clone()))
+                    .cloned();
+
+                format!(
+                    "Responding with info from {} for {}: {auth_token:?}",
+                    params.source, params.username
+                )
+            }),
         )
-        .route(
-            "/auth/:provider/callback",
-            get(
-                |Path(provider_name): Path<String>,
-                 code: Query<OAuthCode>,
-                 providers: State<AppState>| async move {
-                    if let Some(provider) = providers.lock().await.get_mut(provider_name.as_str()) {
-                        match provider.oauth_callback(&code.code).await {
-                            Ok(()) => StatusCode::OK.into_response(),
-                            Err(e) => {
-                                eprintln!("{e}");
-                                StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                            }
-                        }
-                    } else {
-                        StatusCode::NOT_FOUND.into_response()
-                    }
-                },
-            ),
-        )
-        .route(
-            "/:provider/:user",
-            get(
-                |Path((provider_name, user)): Path<(String, String)>,
-                 providers: State<AppState>| async move {
-                    if let Some(provider) = providers.lock().await.get(provider_name.as_str()) {
-                        match (
-                            provider.get_user(&user).await,
-                            provider.get_projects(&user).await,
-                        ) {
-                            (Ok(Some(user_info)), Ok(projects)) => Json(json!({
-                                "user": user_info,
-                                "projects": projects
-                            }))
-                            .into_response(),
-                            (Ok(None), _) => StatusCode::NOT_FOUND.into_response(),
-                            (Err(e), _) => {
-                                eprintln!("user info error: {e}");
-                                StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                            }
-                            (_, Err(e)) => {
-                                eprintln!("projects error: {e}");
-                                StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                            }
-                        }
-                    } else {
-                        StatusCode::NOT_FOUND.into_response()
-                    }
-                },
-            ),
-        )
-        .with_state(providers);
+        .nest(
+            "/auth",
+            sources.build_router(APP_USER_AGENT, save_auth_token),
+        );
 
     println!("Starting server on port 3000");
     Server::bind(&"0.0.0.0:3000".parse().unwrap())
