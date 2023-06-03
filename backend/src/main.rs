@@ -39,7 +39,11 @@ async fn main() -> Result<(), BackendError> {
         dotenvy::from_filename("../.env.dev")?;
     }
 
-    let environment: Environment = std::env::vars().collect();
+    let environment = {
+        let mut environment = std::env::vars().collect::<Environment>();
+        environment.extend([("USER_AGENT".to_string(), APP_USER_AGENT.to_string())].into_iter());
+        environment
+    };
 
     let mut sources = [Box::new(Github::from_environment(&environment)?) as Box<dyn Source>]
         .into_iter()
@@ -80,10 +84,7 @@ async fn main() -> Result<(), BackendError> {
                 )
             }),
         )
-        .nest(
-            "/auth",
-            sources.build_router(APP_USER_AGENT, save_auth_token),
-        );
+        .nest("/auth", sources.build_router(save_auth_token));
 
     println!("Starting server on port 3000");
     Server::bind(&"0.0.0.0:3000".parse().unwrap())

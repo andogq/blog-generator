@@ -18,7 +18,6 @@ pub struct SourceCollection {
 impl SourceCollection {
     pub fn build_router(
         &mut self,
-        user_agent: &str,
         save_auth_token: UnboundedSender<(String, String, String)>,
     ) -> Router {
         std::mem::take(&mut self.auth)
@@ -26,7 +25,7 @@ impl SourceCollection {
             .fold(Router::new(), |router, auth_source| {
                 router.nest(
                     &format!("/{}", auth_source.get_identifier()),
-                    auth_source.register_routes(user_agent, save_auth_token.clone()),
+                    auth_source.register_routes(save_auth_token.clone()),
                 )
             })
     }

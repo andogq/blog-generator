@@ -2,15 +2,11 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Query, State},
-    http::{HeaderMap, HeaderValue},
     response::{IntoResponse, Redirect},
     routing::get,
     Router,
 };
-use reqwest::{
-    header::{self, InvalidHeaderValue},
-    Client, StatusCode,
-};
+use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
@@ -29,13 +25,15 @@ use crate::{
 pub struct GithubOAuth {
     identifier: String,
     config: GithubConfig,
+    client: Client,
 }
 
 impl GithubOAuth {
-    pub fn new(identifier: &str, config: &GithubConfig) -> Self {
+    pub fn new(identifier: &str, config: &GithubConfig, client: &Client) -> Self {
         Self {
             identifier: identifier.to_string(),
             config: config.clone(),
+            client: client.clone(),
         }
     }
 }
@@ -75,21 +73,10 @@ impl IdentifiableSource for GithubOAuth {
 impl AuthSource for GithubOAuth {
     fn register_routes(
         &self,
-        user_agent: &str,
         save_auth_token: UnboundedSender<(String, String, String)>,
     ) -> Router {
         let state = AuthState {
-            client: Client::builder()
-                .default_headers(
-                    [(header::ACCEPT, "application/vnd.github+json")]
-                        .into_iter()
-                        .map(|(header, value)| Ok((header, HeaderValue::from_str(value)?)))
-                        .collect::<Result<HeaderMap, InvalidHeaderValue>>()
-                        .unwrap(),
-                )
-                .user_agent(user_agent)
-                .build()
-                .unwrap(),
+            client: self.client.clone(),
             save_auth_token,
             config: Arc::new(self.config.clone()),
             identifier: Arc::new(self.identifier.clone()),
