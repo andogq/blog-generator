@@ -7,7 +7,7 @@ use axum::http::{HeaderMap, HeaderValue};
 use projects::repos::GithubProjectsRepos;
 use reqwest::{
     header::{self, InvalidHeaderValue},
-    Client,
+    Client, Url,
 };
 
 use shared::{
@@ -52,12 +52,16 @@ impl Github {
 pub struct GithubConfig {
     client_secret: String,
     client_id: String,
+    rest_base: Url,
+    oauth_base: Url,
 }
 impl GithubConfig {
     pub fn from_environment(environment: &Environment) -> Result<Self, PluginError> {
         Ok(Self {
             client_secret: get_from_environment!(environment, "GITHUB_CLIENT_SECRET"),
             client_id: get_from_environment!(environment, "GITHUB_CLIENT_ID"),
+            rest_base: get_from_environment!(environment, "GITHUB_REST_BASE").parse()?,
+            oauth_base: get_from_environment!(environment, "GITHUB_OAUTH_BASE").parse()?,
         })
     }
 }

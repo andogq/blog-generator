@@ -3,7 +3,7 @@ use serde::Deserialize;
 use shared::plugin::UserInformation;
 use url::Url;
 
-use crate::api::{rest::API_BASE, GithubApiError};
+use crate::api::GithubApiError;
 
 #[derive(Deserialize)]
 pub struct GetUserResponse {
@@ -45,11 +45,12 @@ impl From<GetUserResponse> for UserInformation {
 }
 
 pub async fn get_user(
+    api_base: &Url,
     client: &Client,
     access_token: &str,
 ) -> Result<GetUserResponse, GithubApiError> {
     let response = client
-        .get(Url::parse(API_BASE).and_then(|url| url.join("user"))?)
+        .get(api_base.join("user")?)
         .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
         .send()
         .await?;

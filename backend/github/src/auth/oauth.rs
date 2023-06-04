@@ -86,6 +86,7 @@ async fn handle_oauth(
     params: Query<OauthQueryParams>,
 ) -> Result<StatusCode, OAuthHandlerError> {
     let access_token = get_access_token(
+        &state.config.oauth_base,
         state.client.clone(),
         &state.config.client_id,
         &state.config.client_secret,
@@ -94,7 +95,7 @@ async fn handle_oauth(
     .await?
     .access_token;
 
-    let user_info = get_user(&state.client, &access_token).await?;
+    let user_info = get_user(&state.config.rest_base, &state.client, &access_token).await?;
 
     state
         .save_auth_token
@@ -110,6 +111,7 @@ async fn handle_oauth(
 
 async fn handle_redirect(State(state): State<AuthState>) -> Result<Redirect, OAuthHandlerError> {
     generate_redirect_url(
+        &state.config.oauth_base,
         &state.config.client_id,
         &[Scope::ReadUser, Scope::Repo],
         "http://localhost:3000/auth/github/oauth/oauth",

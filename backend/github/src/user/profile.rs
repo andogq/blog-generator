@@ -22,7 +22,7 @@ impl GithubUserProfile {
 impl UserPlugin for GithubUserProfile {
     async fn get_user(&self, _username: &str, auth_token: &str) -> UserInformation {
         // TODO: Don't do this :(
-        rest::get_user(&self.client, auth_token)
+        rest::get_user(&self.config.rest_base, &self.client, auth_token)
             .await
             .unwrap()
             .into()

@@ -20,7 +20,7 @@ impl GithubProjectsRepos {
 #[async_trait]
 impl ProjectsPlugin for GithubProjectsRepos {
     async fn get_projects(&self, _username: &str, auth_token: &str) -> Vec<ProjectInformation> {
-        rest::list_repositories(&self.client, auth_token)
+        rest::list_repositories(&self.config.rest_base, &self.client, auth_token)
             .await
             .unwrap()
             .iter()

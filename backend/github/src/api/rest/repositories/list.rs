@@ -2,9 +2,7 @@ use reqwest::{header, Client, Url};
 use serde::Deserialize;
 use shared::plugin::{ProjectInformation, Repo};
 
-use crate::{
-    api::{rest::API_BASE, GithubApiError},
-};
+use crate::api::GithubApiError;
 
 #[derive(Deserialize)]
 pub struct RepositoryResponse {
@@ -47,11 +45,12 @@ impl From<&RepositoryResponse> for ProjectInformation {
 }
 
 pub async fn list_repositories(
+    api_base: &Url,
     client: &Client,
     access_token: &str,
 ) -> Result<Vec<RepositoryResponse>, GithubApiError> {
     let response = client
-        .get(Url::parse(API_BASE).and_then(|url| url.join("user/repos"))?)
+        .get(api_base.join("user/repos")?)
         .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
         .send()
         .await?;

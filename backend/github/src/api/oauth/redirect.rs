@@ -1,13 +1,14 @@
 use url::{ParseError, Url};
 
-use super::{Scope, API_BASE};
+use super::Scope;
 
 pub fn generate_redirect_url(
+    api_base: &Url,
     client_id: &str,
     scopes: &[Scope],
     redirect_url: &str,
 ) -> Result<Url, ParseError> {
-    let mut url = Url::parse(API_BASE).and_then(|url| url.join("authorize"))?;
+    let mut url = api_base.join("authorize")?;
     url.query_pairs_mut().extend_pairs([
         (
             "scope",
