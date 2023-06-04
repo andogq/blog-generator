@@ -10,6 +10,27 @@ pub use auth::*;
 pub use projects::*;
 pub use user::*;
 
+pub struct AuthTokenPayload {
+    source: String,
+    username: String,
+    auth_token: String,
+}
+impl AuthTokenPayload {
+    pub fn new(source: &str, username: &str, auth_token: &str) -> Self {
+        Self {
+            source: source.to_string(),
+            username: username.to_string(),
+            auth_token: auth_token.to_string(),
+        }
+    }
+
+    pub fn to_key_value(self) -> ((String, String), String) {
+        ((self.source, self.username), self.auth_token)
+    }
+}
+
+pub type SaveAuthToken = UnboundedSender<AuthTokenPayload>;
+
 #[derive(Default)]
 pub struct PluginCollection {
     pub auth: Vec<(String, Box<dyn AuthPlugin>)>,
@@ -21,14 +42,14 @@ impl PluginCollection {
     pub fn build_router(
         &mut self,
         source_identifier: &str,
-        save_auth_token: UnboundedSender<(String, String, String)>,
+        save_auth_token: SaveAuthToken,
     ) -> Router {
         std::mem::take(&mut self.auth).into_iter().fold(
             Router::new(),
-            |router, (identifier, auth_source)| {
+            |router, (identifier, auth_plugin)| {
                 router.nest(
                     &format!("/{}", identifier),
-                    auth_source.register_routes(source_identifier, save_auth_token.clone()),
+                    auth_plugin.register_routes(source_identifier, save_auth_token.clone()),
                 )
             },
         )

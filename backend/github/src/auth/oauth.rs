@@ -8,9 +8,8 @@ use axum::{
 };
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use shared::plugin::AuthPlugin;
+use shared::plugin::{AuthPlugin, AuthTokenPayload, SaveAuthToken};
 use thiserror::Error;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     api::{
@@ -38,7 +37,7 @@ impl GithubOAuth {
 #[derive(Clone)]
 struct AuthState {
     client: Client,
-    save_auth_token: UnboundedSender<(String, String, String)>,
+    save_auth_token: SaveAuthToken,
     config: Arc<GithubConfig>,
     source_identifier: Arc<String>,
 }
@@ -62,11 +61,7 @@ impl IntoResponse for OAuthHandlerError {
 }
 
 impl AuthPlugin for GithubOAuth {
-    fn register_routes(
-        &self,
-        source_identifier: &str,
-        save_auth_token: UnboundedSender<(String, String, String)>,
-    ) -> Router {
+    fn register_routes(&self, source_identifier: &str, save_auth_token: SaveAuthToken) -> Router {
         let state = AuthState {
             client: self.client.clone(),
             save_auth_token,
@@ -103,10 +98,10 @@ async fn handle_oauth(
 
     state
         .save_auth_token
-        .send((
-            state.source_identifier.to_string(),
-            user_info.login,
-            access_token,
+        .send(AuthTokenPayload::new(
+            &state.source_identifier,
+            &user_info.login,
+            &access_token,
         ))
         .map_err(|_| OAuthHandlerError::Channel)?;
 

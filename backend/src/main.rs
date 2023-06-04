@@ -7,7 +7,7 @@ use axum::{routing::get, Router, Server};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use shared::environment::Environment;
-use shared::plugin::PluginError;
+use shared::plugin::{AuthTokenPayload, PluginError};
 use shared::source::Source;
 use thiserror::Error;
 use tokio::{
@@ -48,7 +48,7 @@ async fn main() -> Result<(), BackendError> {
         environment
     };
 
-    let (save_auth_token, mut save_auth_token_rx) = unbounded_channel::<(String, String, String)>();
+    let (save_auth_token, mut save_auth_token_rx) = unbounded_channel::<AuthTokenPayload>();
 
     let (auth_plugins, user_plugins, project_plugins) = [(
         "github",
@@ -97,12 +97,12 @@ async fn main() -> Result<(), BackendError> {
     {
         let authentication_storage = Arc::clone(&authentication_storage);
         task::spawn(async move {
-            while let Some((identifier, username, auth_token)) = save_auth_token_rx.recv().await {
-                println!("New auth: {identifier}, {username}:{auth_token}");
-                authentication_storage
-                    .write()
-                    .await
-                    .insert((identifier, username), auth_token);
+            while let Some(auth_token) = save_auth_token_rx.recv().await {
+                let (key, value) = auth_token.to_key_value();
+
+                println!("Adding: {key:?}");
+
+                authentication_storage.write().await.insert(key, value);
             }
         });
     }

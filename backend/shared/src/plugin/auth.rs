@@ -1,10 +1,7 @@
 use axum::Router;
-use tokio::sync::mpsc::UnboundedSender;
+
+use super::SaveAuthToken;
 
 pub trait AuthPlugin {
-    fn register_routes(
-        &self,
-        source_identifier: &str,
-        save_auth_token: UnboundedSender<(String, String, String)>,
-    ) -> Router;
+    fn register_routes(&self, source_identifier: &str, save_auth_token: SaveAuthToken) -> Router;
 }
