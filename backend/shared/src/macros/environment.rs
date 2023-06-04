@@ -3,7 +3,7 @@ macro_rules! get_from_environment {
     ($environment:ident, $var:expr) => {
         $environment
             .get($var)
-            .ok_or(SourceError::MissingEnvVar($var.to_string()))?
+            .ok_or(PluginError::MissingEnvVar($var.to_string()))?
             .to_string()
     };
 }

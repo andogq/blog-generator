@@ -1,6 +1,6 @@
 use reqwest::{header, Client};
 use serde::Deserialize;
-use shared::source::user::UserInformation;
+use shared::plugin::UserInformation;
 use url::Url;
 
 use crate::api::{rest::API_BASE, GithubApiError};

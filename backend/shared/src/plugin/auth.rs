@@ -1,7 +1,7 @@
 use axum::Router;
 use tokio::sync::mpsc::UnboundedSender;
 
-pub trait AuthSource {
+pub trait AuthPlugin {
     fn register_routes(
         &self,
         source_identifier: &str,

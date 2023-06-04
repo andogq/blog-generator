@@ -2,19 +2,20 @@ mod api;
 mod auth;
 mod user;
 
-use std::collections::HashMap;
-
-pub use auth::oauth::GithubOAuth;
 use axum::http::{HeaderMap, HeaderValue};
 use reqwest::{
     header::{self, InvalidHeaderValue},
     Client,
 };
+
 use shared::{
     environment::Environment,
     get_from_environment,
-    source::{AuthSource, Source, SourceCollection, SourceError, UserSource},
+    plugin::{AuthPlugin, PluginCollection, PluginError, UserPlugin},
+    source::Source,
 };
+
+use auth::oauth::GithubOAuth;
 use user::GithubUserProfile;
 
 pub struct Github {
@@ -22,7 +23,7 @@ pub struct Github {
     client: Client,
 }
 impl Github {
-    pub fn from_environment(environment: &Environment) -> Result<Self, SourceError> {
+    pub fn from_environment(environment: &Environment) -> Result<Self, PluginError> {
         let config = GithubConfig::from_environment(environment)?;
 
         let client = Client::builder()
@@ -36,7 +37,7 @@ impl Github {
             .user_agent(
                 environment
                     .get("USER_AGENT")
-                    .ok_or(SourceError::MissingEnvVar("USER_AGENT".to_string()))?,
+                    .ok_or(PluginError::MissingEnvVar("USER_AGENT".to_string()))?,
             )
             .build()
             .unwrap();
@@ -51,7 +52,7 @@ pub struct GithubConfig {
     client_id: String,
 }
 impl GithubConfig {
-    pub fn from_environment(environment: &Environment) -> Result<Self, SourceError> {
+    pub fn from_environment(environment: &Environment) -> Result<Self, PluginError> {
         Ok(Self {
             client_secret: get_from_environment!(environment, "GITHUB_CLIENT_SECRET"),
             client_id: get_from_environment!(environment, "GITHUB_CLIENT_ID"),
@@ -60,17 +61,17 @@ impl GithubConfig {
 }
 
 impl Source for Github {
-    fn get_sources(&self) -> SourceCollection {
-        SourceCollection {
+    fn get_plugins(&self) -> PluginCollection {
+        PluginCollection {
             auth: [(
                 "oauth".to_string(),
-                Box::new(GithubOAuth::new(&self.config, &self.client)) as Box<dyn AuthSource>,
+                Box::new(GithubOAuth::new(&self.config, &self.client)) as Box<dyn AuthPlugin>,
             )]
             .into_iter()
             .collect(),
             user: [(
                 "profile".to_string(),
-                Box::new(GithubUserProfile::new(&self.config, &self.client)) as Box<dyn UserSource>,
+                Box::new(GithubUserProfile::new(&self.config, &self.client)) as Box<dyn UserPlugin>,
             )]
             .into_iter()
             .collect(),

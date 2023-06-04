@@ -17,6 +17,6 @@ pub struct UserInformation {
 }
 
 #[async_trait]
-pub trait UserSource: Send + Sync {
+pub trait UserPlugin: Send + Sync {
     async fn get_user(&self, username: &str, auth_token: &str) -> UserInformation;
 }

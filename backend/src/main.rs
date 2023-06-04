@@ -7,7 +7,8 @@ use axum::{routing::get, Router, Server};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use shared::environment::Environment;
-use shared::source::{project, Source, SourceCollection, SourceError};
+use shared::plugin::PluginError;
+use shared::source::Source;
 use thiserror::Error;
 use tokio::{
     sync::{mpsc::unbounded_channel, RwLock},
@@ -22,8 +23,8 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 enum BackendError {
     #[error("loading env file with dotenvy failed: {0}")]
     DotEnv(#[from] dotenvy::Error),
-    #[error("source error: {0}")]
-    Source(#[from] SourceError),
+    #[error("plugin error: {0}")]
+    Plugin(#[from] PluginError),
 }
 
 #[derive(Deserialize)]
@@ -49,48 +50,47 @@ async fn main() -> Result<(), BackendError> {
 
     let (save_auth_token, mut save_auth_token_rx) = unbounded_channel::<(String, String, String)>();
 
-    let (auth_sources, user_sources, project_sources) = [(
+    let (auth_plugins, user_plugins, project_plugins) = [(
         "github",
         Box::new(Github::from_environment(&environment)?) as Box<dyn Source>,
     )]
     .into_iter()
     .fold(
         (vec![], vec![], vec![]),
-        |(mut auth_sources, mut user_sources, mut project_sources), (identifier, source)| {
-            let sources = source.get_sources();
+        |(mut auth_plugins, mut user_plugins, mut project_plugins), (identifier, source)| {
+            let plugins = source.get_plugins();
 
-            auth_sources.extend(
-                sources
+            auth_plugins.extend(
+                plugins
                     .auth
                     .into_iter()
-                    .map(|(source_identifier, source)| {
-                        (identifier.to_string(), source_identifier, source)
+                    .map(|(plugin_identifier, source)| {
+                        (identifier.to_string(), plugin_identifier, source)
                     })
                     .collect::<Vec<_>>(),
             );
-            user_sources.extend(
-                sources
+            user_plugins.extend(
+                plugins
                     .user
                     .into_iter()
-                    .map(|(source_identifier, source)| {
-                        (identifier.to_string(), source_identifier, source)
+                    .map(|(plugin_identifier, source)| {
+                        (identifier.to_string(), plugin_identifier, source)
                     })
                     .collect::<Vec<_>>(),
             );
-            project_sources.extend(
-                sources
+            project_plugins.extend(
+                plugins
                     .project
                     .into_iter()
-                    .map(|(source_identifier, source)| {
-                        (identifier.to_string(), source_identifier, source)
+                    .map(|(plugin_identifier, source)| {
+                        (identifier.to_string(), plugin_identifier, source)
                     })
                     .collect::<Vec<_>>(),
             );
 
-            (auth_sources, user_sources, project_sources)
+            (auth_plugins, user_plugins, project_plugins)
         },
     );
-    // let auth_router = sources.build_router(save_auth_token);
 
     let authentication_storage = Arc::new(RwLock::new(HashMap::<(String, String), String>::new()));
 
@@ -111,20 +111,20 @@ async fn main() -> Result<(), BackendError> {
         .route("/", get(|| async { "Hello, World!" }))
         .nest(
             "/user",
-            user_sources.into_iter().fold(
+            user_plugins.into_iter().fold(
                 Router::new(),
-                |router, (source_identifier, identifier, source)| {
+                |router, (identifier, plugin_identifier, source)| {
                     let source = Arc::new(source);
                     let authentication_storage = Arc::clone(&authentication_storage);
 
                     router.route(
-                        &format!("/{source_identifier}/{identifier}/:username"),
+                        &format!("/{identifier}/{plugin_identifier}/:username"),
                         get(|Path(params): Path<UserRequestPath>| async move {
                             // Extract user authentication token
                             let auth_token = authentication_storage
                                 .read()
                                 .await
-                                .get(&(source_identifier.to_string(), params.username.clone()))
+                                .get(&(identifier.to_string(), params.username.clone()))
                                 .cloned();
 
                             if let Some(auth_token) = auth_token {
@@ -140,12 +140,12 @@ async fn main() -> Result<(), BackendError> {
         )
         .nest(
             "/auth",
-            auth_sources.into_iter().fold(
+            auth_plugins.into_iter().fold(
                 Router::new(),
-                |router, (source_identifier, identifier, source)| {
+                |router, (identifier, plugin_identifier, source)| {
                     router.nest(
-                        &format!("/{source_identifier}/{identifier}"),
-                        source.register_routes(&source_identifier, save_auth_token.clone()),
+                        &format!("/{identifier}/{plugin_identifier}"),
+                        source.register_routes(&identifier, save_auth_token.clone()),
                     )
                 },
             ),

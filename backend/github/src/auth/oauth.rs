@@ -8,7 +8,7 @@ use axum::{
 };
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use shared::source::AuthSource;
+use shared::plugin::AuthPlugin;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -40,7 +40,7 @@ struct AuthState {
     client: Client,
     save_auth_token: UnboundedSender<(String, String, String)>,
     config: Arc<GithubConfig>,
-    identifier: Arc<String>,
+    source_identifier: Arc<String>,
 }
 
 #[derive(Debug, Error)]
@@ -61,7 +61,7 @@ impl IntoResponse for OAuthHandlerError {
     }
 }
 
-impl AuthSource for GithubOAuth {
+impl AuthPlugin for GithubOAuth {
     fn register_routes(
         &self,
         source_identifier: &str,
@@ -71,7 +71,7 @@ impl AuthSource for GithubOAuth {
             client: self.client.clone(),
             save_auth_token,
             config: Arc::new(self.config.clone()),
-            identifier: Arc::new(source_identifier.to_string()),
+            source_identifier: Arc::new(source_identifier.to_string()),
         };
 
         Router::new()
@@ -103,7 +103,11 @@ async fn handle_oauth(
 
     state
         .save_auth_token
-        .send((state.identifier.to_string(), user_info.login, access_token))
+        .send((
+            state.source_identifier.to_string(),
+            user_info.login,
+            access_token,
+        ))
         .map_err(|_| OAuthHandlerError::Channel)?;
 
     Ok(StatusCode::OK)

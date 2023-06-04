@@ -1,23 +1,23 @@
-use std::collections::HashMap;
-
 use axum::Router;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
-pub use self::{auth::AuthSource, project::ProjectsSource, user::UserSource};
+mod auth;
+mod projects;
+mod user;
 
-pub mod auth;
-pub mod project;
-pub mod user;
+pub use auth::*;
+pub use projects::*;
+pub use user::*;
 
 #[derive(Default)]
-pub struct SourceCollection {
-    pub auth: Vec<(String, Box<dyn AuthSource>)>,
-    pub user: Vec<(String, Box<dyn UserSource>)>,
-    pub project: Vec<(String, Box<dyn ProjectsSource>)>,
+pub struct PluginCollection {
+    pub auth: Vec<(String, Box<dyn AuthPlugin>)>,
+    pub user: Vec<(String, Box<dyn UserPlugin>)>,
+    pub project: Vec<(String, Box<dyn ProjectsPlugin>)>,
 }
 
-impl SourceCollection {
+impl PluginCollection {
     pub fn build_router(
         &mut self,
         source_identifier: &str,
@@ -35,8 +35,8 @@ impl SourceCollection {
     }
 }
 
-impl FromIterator<SourceCollection> for SourceCollection {
-    fn from_iter<T: IntoIterator<Item = SourceCollection>>(iter: T) -> Self {
+impl FromIterator<PluginCollection> for PluginCollection {
+    fn from_iter<T: IntoIterator<Item = PluginCollection>>(iter: T) -> Self {
         iter.into_iter()
             .reduce(|mut combined, mut source| {
                 combined
@@ -56,13 +56,9 @@ impl FromIterator<SourceCollection> for SourceCollection {
 }
 
 #[derive(Debug, Error)]
-pub enum SourceError {
+pub enum PluginError {
     #[error("missing environment variable {0}")]
     MissingEnvVar(String),
     #[error("invalid url: {0}")]
     UrlParse(#[from] url::ParseError),
-}
-
-pub trait Source {
-    fn get_sources(&self) -> SourceCollection;
 }
