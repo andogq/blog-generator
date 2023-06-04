@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use api::{oauth::OauthApi, rest::RestApi};
 use axum::http::{HeaderMap, HeaderValue};
-use projects::repos::GithubProjectsRepos;
+use projects::{repo_topics::RepoTags, repos::GithubProjectsRepos};
 use reqwest::{
     header::{self, InvalidHeaderValue},
     Client, Url,
@@ -95,10 +95,16 @@ impl Source for Github {
             )]
             .into_iter()
             .collect(),
-            project: [(
-                "repos".to_string(),
-                Box::new(GithubProjectsRepos::new(&self.rest_api)) as Box<dyn ProjectsPlugin>,
-            )]
+            project: [
+                (
+                    "repos".to_string(),
+                    Box::new(GithubProjectsRepos::new(&self.rest_api)) as Box<dyn ProjectsPlugin>,
+                ),
+                (
+                    "repo_topics".to_string(),
+                    Box::new(RepoTags::new(&self.rest_api)) as Box<dyn ProjectsPlugin>,
+                ),
+            ]
             .into_iter()
             .collect(),
         }

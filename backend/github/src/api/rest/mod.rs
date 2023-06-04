@@ -1,13 +1,17 @@
 mod repositories;
+mod search;
 mod user;
 
-pub use repositories::*;
 use reqwest::{Client, Url};
+
+pub use repositories::*;
+pub use search::*;
 pub use user::*;
 
 pub struct RestApi {
     pub repositories: RepositoriesApi,
     pub user: UserApi,
+    pub search: SearchApi,
 }
 
 impl RestApi {
@@ -15,6 +19,7 @@ impl RestApi {
         Self {
             repositories: RepositoriesApi::new(client, api_base),
             user: UserApi::new(client, api_base),
+            search: SearchApi::new(client, api_base),
         }
     }
 }
