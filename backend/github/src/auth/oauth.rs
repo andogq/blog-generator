@@ -8,10 +8,9 @@ use axum::{
 };
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
+use shared::source::AuthSource;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
-
-use shared::source::{auth::AuthSource, IdentifiableSource};
 
 use crate::{
     api::{
@@ -23,15 +22,13 @@ use crate::{
 };
 
 pub struct GithubOAuth {
-    identifier: String,
     config: GithubConfig,
     client: Client,
 }
 
 impl GithubOAuth {
-    pub fn new(identifier: &str, config: &GithubConfig, client: &Client) -> Self {
+    pub fn new(config: &GithubConfig, client: &Client) -> Self {
         Self {
-            identifier: identifier.to_string(),
             config: config.clone(),
             client: client.clone(),
         }
@@ -64,22 +61,17 @@ impl IntoResponse for OAuthHandlerError {
     }
 }
 
-impl IdentifiableSource for GithubOAuth {
-    fn get_identifier(&self) -> String {
-        self.identifier.to_string()
-    }
-}
-
 impl AuthSource for GithubOAuth {
     fn register_routes(
         &self,
+        source_identifier: &str,
         save_auth_token: UnboundedSender<(String, String, String)>,
     ) -> Router {
         let state = AuthState {
             client: self.client.clone(),
             save_auth_token,
             config: Arc::new(self.config.clone()),
-            identifier: Arc::new(self.identifier.clone()),
+            identifier: Arc::new(source_identifier.to_string()),
         };
 
         Router::new()
@@ -121,7 +113,7 @@ async fn handle_redirect(State(state): State<AuthState>) -> Result<Redirect, OAu
     generate_redirect_url(
         &state.config.client_id,
         &[Scope::ReadUser, Scope::Repo],
-        "http://localhost:3000/auth/github_oauth/oauth",
+        "http://localhost:3000/auth/github/oauth/oauth",
     )
     .map(|url| Redirect::temporary(url.as_ref()))
     .map_err(OAuthHandlerError::UrlParse)

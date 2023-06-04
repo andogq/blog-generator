@@ -7,7 +7,7 @@ use axum::{routing::get, Router, Server};
 use reqwest::StatusCode;
 use serde::Deserialize;
 use shared::environment::Environment;
-use shared::source::{Source, SourceCollection, SourceError};
+use shared::source::{project, Source, SourceCollection, SourceError};
 use thiserror::Error;
 use tokio::{
     sync::{mpsc::unbounded_channel, RwLock},
@@ -49,11 +49,48 @@ async fn main() -> Result<(), BackendError> {
 
     let (save_auth_token, mut save_auth_token_rx) = unbounded_channel::<(String, String, String)>();
 
-    let mut sources = [Box::new(Github::from_environment(&environment)?) as Box<dyn Source>]
-        .into_iter()
-        .map(|source| source.get_sources())
-        .collect::<SourceCollection>();
-    let auth_router = sources.build_router(save_auth_token);
+    let (auth_sources, user_sources, project_sources) = [(
+        "github",
+        Box::new(Github::from_environment(&environment)?) as Box<dyn Source>,
+    )]
+    .into_iter()
+    .fold(
+        (vec![], vec![], vec![]),
+        |(mut auth_sources, mut user_sources, mut project_sources), (identifier, source)| {
+            let sources = source.get_sources();
+
+            auth_sources.extend(
+                sources
+                    .auth
+                    .into_iter()
+                    .map(|(source_identifier, source)| {
+                        (identifier.to_string(), source_identifier, source)
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            user_sources.extend(
+                sources
+                    .user
+                    .into_iter()
+                    .map(|(source_identifier, source)| {
+                        (identifier.to_string(), source_identifier, source)
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            project_sources.extend(
+                sources
+                    .project
+                    .into_iter()
+                    .map(|(source_identifier, source)| {
+                        (identifier.to_string(), source_identifier, source)
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            (auth_sources, user_sources, project_sources)
+        },
+    );
+    // let auth_router = sources.build_router(save_auth_token);
 
     let authentication_storage = Arc::new(RwLock::new(HashMap::<(String, String), String>::new()));
 
@@ -74,21 +111,20 @@ async fn main() -> Result<(), BackendError> {
         .route("/", get(|| async { "Hello, World!" }))
         .nest(
             "/user",
-            sources
-                .user
-                .into_iter()
-                .fold(Router::new(), |router, (identifier, source)| {
+            user_sources.into_iter().fold(
+                Router::new(),
+                |router, (source_identifier, identifier, source)| {
                     let source = Arc::new(source);
                     let authentication_storage = Arc::clone(&authentication_storage);
 
                     router.route(
-                        &format!("/{identifier}/:username"),
+                        &format!("/{source_identifier}/{identifier}/:username"),
                         get(|Path(params): Path<UserRequestPath>| async move {
                             // Extract user authentication token
                             let auth_token = authentication_storage
                                 .read()
                                 .await
-                                .get(&(identifier.to_string(), params.username.clone()))
+                                .get(&(source_identifier.to_string(), params.username.clone()))
                                 .cloned();
 
                             if let Some(auth_token) = auth_token {
@@ -99,9 +135,21 @@ async fn main() -> Result<(), BackendError> {
                             }
                         }),
                     )
-                }),
+                },
+            ),
         )
-        .nest("/auth", auth_router);
+        .nest(
+            "/auth",
+            auth_sources.into_iter().fold(
+                Router::new(),
+                |router, (source_identifier, identifier, source)| {
+                    router.nest(
+                        &format!("/{source_identifier}/{identifier}"),
+                        source.register_routes(&source_identifier, save_auth_token.clone()),
+                    )
+                },
+            ),
+        );
 
     println!("Starting server on port 3000");
     Server::bind(&"0.0.0.0:3000".parse().unwrap())

@@ -12,14 +12,15 @@ pub mod user;
 
 #[derive(Default)]
 pub struct SourceCollection {
-    pub auth: HashMap<String, Box<dyn AuthSource>>,
-    pub user: HashMap<String, Box<dyn UserSource>>,
-    pub project: HashMap<String, Box<dyn ProjectsSource>>,
+    pub auth: Vec<(String, Box<dyn AuthSource>)>,
+    pub user: Vec<(String, Box<dyn UserSource>)>,
+    pub project: Vec<(String, Box<dyn ProjectsSource>)>,
 }
 
 impl SourceCollection {
     pub fn build_router(
         &mut self,
+        source_identifier: &str,
         save_auth_token: UnboundedSender<(String, String, String)>,
     ) -> Router {
         std::mem::take(&mut self.auth).into_iter().fold(
@@ -27,23 +28,9 @@ impl SourceCollection {
             |router, (identifier, auth_source)| {
                 router.nest(
                     &format!("/{}", identifier),
-                    auth_source.register_routes(save_auth_token.clone()),
+                    auth_source.register_routes(source_identifier, save_auth_token.clone()),
                 )
             },
-        )
-    }
-
-    pub fn to_router(self, save_auth_token: UnboundedSender<(String, String, String)>) -> Router {
-        Router::new().nest(
-            "/auth",
-            self.auth
-                .into_iter()
-                .fold(Router::new(), |router, (identifier, source)| {
-                    router.nest(
-                        &format!("/{identifier}"),
-                        source.register_routes(save_auth_token.clone()),
-                    )
-                }),
         )
     }
 }
@@ -78,8 +65,4 @@ pub enum SourceError {
 
 pub trait Source {
     fn get_sources(&self) -> SourceCollection;
-}
-
-pub trait IdentifiableSource {
-    fn get_identifier(&self) -> String;
 }

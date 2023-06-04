@@ -63,23 +63,18 @@ impl Source for Github {
     fn get_sources(&self) -> SourceCollection {
         SourceCollection {
             auth: [(
-                "github_oauth".to_string(),
-                Box::new(GithubOAuth::new("github_oauth", &self.config, &self.client))
-                    as Box<dyn AuthSource>,
+                "oauth".to_string(),
+                Box::new(GithubOAuth::new(&self.config, &self.client)) as Box<dyn AuthSource>,
             )]
             .into_iter()
             .collect(),
             user: [(
-                "github_profile".to_string(),
-                Box::new(GithubUserProfile::new(
-                    "github_profile",
-                    &self.config,
-                    &self.client,
-                )) as Box<dyn UserSource>,
+                "profile".to_string(),
+                Box::new(GithubUserProfile::new(&self.config, &self.client)) as Box<dyn UserSource>,
             )]
             .into_iter()
             .collect(),
-            project: HashMap::new(),
+            project: Vec::new(),
         }
     }
 }
