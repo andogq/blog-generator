@@ -1,5 +1,6 @@
 use reqwest::{header, Client};
 use serde::Deserialize;
+use shared::source::user::UserInformation;
 use url::Url;
 
 use crate::api::{rest::API_BASE, GithubApiError};
@@ -18,8 +19,33 @@ pub struct GetUserResponse {
     twitter_username: Option<String>,
 }
 
+impl From<GetUserResponse> for UserInformation {
+    fn from(user: GetUserResponse) -> Self {
+        Self {
+            name: user.name,
+            avatar: user.avatar_url,
+            bio: user.bio,
+            location: user.location,
+            email: user.email,
+            links: [
+                ("github".to_string(), Some(user.html_url)),
+                (
+                    "twitter".to_string(),
+                    user.twitter_username
+                        .map(|username| format!("https://twitter.com/{username}")),
+                ),
+            ]
+            .into_iter()
+            .filter_map(|(site, url)| url.map(|url| (site, url)))
+            .collect(),
+            blog: user.blog,
+            company: user.company,
+        }
+    }
+}
+
 pub async fn get_user(
-    client: Client,
+    client: &Client,
     access_token: &str,
 ) -> Result<GetUserResponse, GithubApiError> {
     let response = client

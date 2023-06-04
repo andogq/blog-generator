@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::Router;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
@@ -10,9 +12,9 @@ pub mod user;
 
 #[derive(Default)]
 pub struct SourceCollection {
-    pub auth: Vec<Box<dyn AuthSource>>,
-    pub user: Vec<Box<dyn UserSource>>,
-    pub project: Vec<Box<dyn ProjectsSource>>,
+    pub auth: HashMap<String, Box<dyn AuthSource>>,
+    pub user: HashMap<String, Box<dyn UserSource>>,
+    pub project: HashMap<String, Box<dyn ProjectsSource>>,
 }
 
 impl SourceCollection {
@@ -20,14 +22,29 @@ impl SourceCollection {
         &mut self,
         save_auth_token: UnboundedSender<(String, String, String)>,
     ) -> Router {
-        std::mem::take(&mut self.auth)
-            .into_iter()
-            .fold(Router::new(), |router, auth_source| {
+        std::mem::take(&mut self.auth).into_iter().fold(
+            Router::new(),
+            |router, (identifier, auth_source)| {
                 router.nest(
-                    &format!("/{}", auth_source.get_identifier()),
+                    &format!("/{}", identifier),
                     auth_source.register_routes(save_auth_token.clone()),
                 )
-            })
+            },
+        )
+    }
+
+    pub fn to_router(self, save_auth_token: UnboundedSender<(String, String, String)>) -> Router {
+        Router::new().nest(
+            "/auth",
+            self.auth
+                .into_iter()
+                .fold(Router::new(), |router, (identifier, source)| {
+                    router.nest(
+                        &format!("/{identifier}"),
+                        source.register_routes(save_auth_token.clone()),
+                    )
+                }),
+        )
     }
 }
 
@@ -35,7 +52,15 @@ impl FromIterator<SourceCollection> for SourceCollection {
     fn from_iter<T: IntoIterator<Item = SourceCollection>>(iter: T) -> Self {
         iter.into_iter()
             .reduce(|mut combined, mut source| {
-                combined.auth.append(&mut source.auth);
+                combined
+                    .auth
+                    .extend(std::mem::take(&mut source.auth).into_iter());
+                combined
+                    .user
+                    .extend(std::mem::take(&mut source.user).into_iter());
+                combined
+                    .project
+                    .extend(std::mem::take(&mut source.project).into_iter());
 
                 combined
             })

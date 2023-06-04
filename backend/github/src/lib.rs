@@ -1,5 +1,8 @@
 mod api;
 mod auth;
+mod user;
+
+use std::collections::HashMap;
 
 pub use auth::oauth::GithubOAuth;
 use axum::http::{HeaderMap, HeaderValue};
@@ -10,8 +13,9 @@ use reqwest::{
 use shared::{
     environment::Environment,
     get_from_environment,
-    source::{AuthSource, Source, SourceCollection, SourceError},
+    source::{AuthSource, Source, SourceCollection, SourceError, UserSource},
 };
+use user::GithubUserProfile;
 
 pub struct Github {
     config: GithubConfig,
@@ -58,13 +62,24 @@ impl GithubConfig {
 impl Source for Github {
     fn get_sources(&self) -> SourceCollection {
         SourceCollection {
-            auth: vec![Box::new(GithubOAuth::new(
-                "github_oauth",
-                &self.config,
-                &self.client,
-            )) as Box<dyn AuthSource>],
-            user: vec![],
-            project: vec![],
+            auth: [(
+                "github_oauth".to_string(),
+                Box::new(GithubOAuth::new("github_oauth", &self.config, &self.client))
+                    as Box<dyn AuthSource>,
+            )]
+            .into_iter()
+            .collect(),
+            user: [(
+                "github_profile".to_string(),
+                Box::new(GithubUserProfile::new(
+                    "github_profile",
+                    &self.config,
+                    &self.client,
+                )) as Box<dyn UserSource>,
+            )]
+            .into_iter()
+            .collect(),
+            project: HashMap::new(),
         }
     }
 }

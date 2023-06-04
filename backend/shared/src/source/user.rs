@@ -6,19 +6,19 @@ use super::IdentifiableSource;
 
 #[derive(Debug, Serialize)]
 pub struct UserInformation {
-    name: Option<String>,
-    avatar: String,
-    bio: Option<String>,
-    location: Option<String>,
+    pub name: Option<String>,
+    pub avatar: String,
+    pub bio: Option<String>,
+    pub location: Option<String>,
 
-    email: Option<String>,
+    pub email: Option<String>,
 
-    links: HashMap<String, String>,
-    blog: Option<String>,
-    company: Option<String>,
+    pub links: HashMap<String, String>,
+    pub blog: Option<String>,
+    pub company: Option<String>,
 }
 
 #[async_trait]
-pub trait UserSource: IdentifiableSource {
+pub trait UserSource: IdentifiableSource + Send + Sync {
     async fn get_user(&self, username: &str, auth_token: &str) -> UserInformation;
 }

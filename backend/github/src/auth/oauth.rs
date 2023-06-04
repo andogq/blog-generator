@@ -107,7 +107,7 @@ async fn handle_oauth(
     .await?
     .access_token;
 
-    let user_info = get_user(state.client.clone(), &access_token).await?;
+    let user_info = get_user(&state.client, &access_token).await?;
 
     state
         .save_auth_token
@@ -121,7 +121,7 @@ async fn handle_redirect(State(state): State<AuthState>) -> Result<Redirect, OAu
     generate_redirect_url(
         &state.config.client_id,
         &[Scope::ReadUser, Scope::Repo],
-        "http://localhost:3000/auth/github/oauth",
+        "http://localhost:3000/auth/github_oauth/oauth",
     )
     .map(|url| Redirect::temporary(url.as_ref()))
     .map_err(OAuthHandlerError::UrlParse)

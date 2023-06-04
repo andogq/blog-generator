@@ -1,3 +1,3 @@
 use super::IdentifiableSource;
 
-pub trait ProjectsSource: IdentifiableSource {}
+pub trait ProjectsSource: IdentifiableSource + Send + Sync {}
