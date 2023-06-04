@@ -1,8 +1,5 @@
-use reqwest::{header, Client, Url};
 use serde::Deserialize;
 use shared::plugin::{ProjectInformation, Repo};
-
-use crate::api::GithubApiError;
 
 #[derive(Deserialize)]
 pub struct RepositoryResponse {
@@ -42,23 +39,4 @@ impl From<&RepositoryResponse> for ProjectInformation {
             languages: repository.language.clone().map(|language| vec![language]),
         }
     }
-}
-
-pub async fn list_repositories(
-    api_base: &Url,
-    client: &Client,
-    access_token: &str,
-) -> Result<Vec<RepositoryResponse>, GithubApiError> {
-    let response = client
-        .get(api_base.join("user/repos")?)
-        .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
-        .send()
-        .await?;
-
-    GithubApiError::match_status_code(response.status())?;
-
-    response
-        .json::<Vec<RepositoryResponse>>()
-        .await
-        .map_err(GithubApiError::Response)
 }

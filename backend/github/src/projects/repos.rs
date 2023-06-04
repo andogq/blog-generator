@@ -1,18 +1,17 @@
+use std::sync::Arc;
+
 use axum::async_trait;
-use reqwest::Client;
 use shared::plugin::{ProjectInformation, ProjectsPlugin};
 
-use crate::{api::rest, GithubConfig};
+use crate::api::rest::RestApi;
 
 pub struct GithubProjectsRepos {
-    config: GithubConfig,
-    client: Client,
+    rest_api: Arc<RestApi>,
 }
 impl GithubProjectsRepos {
-    pub fn new(config: &GithubConfig, client: &Client) -> Self {
+    pub fn new(rest_api: &Arc<RestApi>) -> Self {
         Self {
-            config: config.clone(),
-            client: client.clone(),
+            rest_api: Arc::clone(rest_api),
         }
     }
 }
@@ -20,7 +19,9 @@ impl GithubProjectsRepos {
 #[async_trait]
 impl ProjectsPlugin for GithubProjectsRepos {
     async fn get_projects(&self, _username: &str, auth_token: &str) -> Vec<ProjectInformation> {
-        rest::list_repositories(&self.config.rest_base, &self.client, auth_token)
+        self.rest_api
+            .repositories
+            .list(auth_token)
             .await
             .unwrap()
             .iter()

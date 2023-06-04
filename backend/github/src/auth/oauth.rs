@@ -6,40 +6,37 @@ use axum::{
     routing::get,
     Router,
 };
-use reqwest::{Client, StatusCode};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use shared::plugin::{AuthPlugin, AuthTokenPayload, SaveAuthToken};
 use thiserror::Error;
 
-use crate::{
-    api::{
-        oauth::{generate_redirect_url, get_access_token, Scope},
-        rest::get_user,
-        GithubApiError,
-    },
-    GithubConfig,
+use crate::api::{
+    oauth::{OauthApi, Scope},
+    rest::RestApi,
+    GithubApiError,
 };
 
 pub struct GithubOAuth {
-    config: GithubConfig,
-    client: Client,
+    rest_api: Arc<RestApi>,
+    oauth_api: Arc<OauthApi>,
 }
 
 impl GithubOAuth {
-    pub fn new(config: &GithubConfig, client: &Client) -> Self {
+    pub fn new(rest_api: &Arc<RestApi>, oauth_api: &Arc<OauthApi>) -> Self {
         Self {
-            config: config.clone(),
-            client: client.clone(),
+            rest_api: Arc::clone(rest_api),
+            oauth_api: Arc::clone(oauth_api),
         }
     }
 }
 
 #[derive(Clone)]
 struct AuthState {
-    client: Client,
     save_auth_token: SaveAuthToken,
-    config: Arc<GithubConfig>,
     source_identifier: Arc<String>,
+    rest_api: Arc<RestApi>,
+    oauth_api: Arc<OauthApi>,
 }
 
 #[derive(Debug, Error)]
@@ -63,10 +60,10 @@ impl IntoResponse for OAuthHandlerError {
 impl AuthPlugin for GithubOAuth {
     fn register_routes(&self, source_identifier: &str, save_auth_token: SaveAuthToken) -> Router {
         let state = AuthState {
-            client: self.client.clone(),
             save_auth_token,
-            config: Arc::new(self.config.clone()),
             source_identifier: Arc::new(source_identifier.to_string()),
+            rest_api: Arc::clone(&self.rest_api),
+            oauth_api: Arc::clone(&self.oauth_api),
         };
 
         Router::new()
@@ -85,17 +82,13 @@ async fn handle_oauth(
     State(state): State<AuthState>,
     params: Query<OauthQueryParams>,
 ) -> Result<StatusCode, OAuthHandlerError> {
-    let access_token = get_access_token(
-        &state.config.oauth_base,
-        state.client.clone(),
-        &state.config.client_id,
-        &state.config.client_secret,
-        &params.code,
-    )
-    .await?
-    .access_token;
+    let access_token = state
+        .oauth_api
+        .get_access_token(&params.code)
+        .await?
+        .access_token;
 
-    let user_info = get_user(&state.config.rest_base, &state.client, &access_token).await?;
+    let user_info = state.rest_api.user.get(&access_token).await?;
 
     state
         .save_auth_token
@@ -110,12 +103,12 @@ async fn handle_oauth(
 }
 
 async fn handle_redirect(State(state): State<AuthState>) -> Result<Redirect, OAuthHandlerError> {
-    generate_redirect_url(
-        &state.config.oauth_base,
-        &state.config.client_id,
-        &[Scope::ReadUser, Scope::Repo],
-        "http://localhost:3000/auth/github/oauth/oauth",
-    )
-    .map(|url| Redirect::temporary(url.as_ref()))
-    .map_err(OAuthHandlerError::UrlParse)
+    state
+        .oauth_api
+        .generate_redirect_url(
+            &[Scope::ReadUser, Scope::Repo],
+            "http://localhost:3000/auth/github/oauth/oauth",
+        )
+        .map(|url| Redirect::temporary(url.as_ref()))
+        .map_err(OAuthHandlerError::UrlParse)
 }

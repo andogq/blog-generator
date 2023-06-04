@@ -1,19 +1,18 @@
+use std::sync::Arc;
+
 use axum::async_trait;
-use reqwest::Client;
 use shared::plugin::{UserInformation, UserPlugin};
 
-use crate::{api::rest, GithubConfig};
+use crate::api::rest::RestApi;
 
 pub struct GithubUserProfile {
-    config: GithubConfig,
-    client: Client,
+    rest_api: Arc<RestApi>,
 }
 
 impl GithubUserProfile {
-    pub fn new(config: &GithubConfig, client: &Client) -> Self {
+    pub fn new(rest_api: &Arc<RestApi>) -> Self {
         Self {
-            config: config.clone(),
-            client: client.clone(),
+            rest_api: Arc::clone(rest_api),
         }
     }
 }
@@ -22,9 +21,6 @@ impl GithubUserProfile {
 impl UserPlugin for GithubUserProfile {
     async fn get_user(&self, _username: &str, auth_token: &str) -> UserInformation {
         // TODO: Don't do this :(
-        rest::get_user(&self.config.rest_base, &self.client, auth_token)
-            .await
-            .unwrap()
-            .into()
+        self.rest_api.user.get(auth_token).await.unwrap().into()
     }
 }

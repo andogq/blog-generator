@@ -1,12 +1,8 @@
-use reqwest::{header, Client};
 use serde::Deserialize;
 use shared::plugin::UserInformation;
-use url::Url;
-
-use crate::api::GithubApiError;
 
 #[derive(Deserialize)]
-pub struct GetUserResponse {
+pub struct UserResponse {
     pub login: String,
     pub avatar_url: String,
     pub html_url: String,
@@ -19,8 +15,8 @@ pub struct GetUserResponse {
     pub twitter_username: Option<String>,
 }
 
-impl From<GetUserResponse> for UserInformation {
-    fn from(user: GetUserResponse) -> Self {
+impl From<UserResponse> for UserInformation {
+    fn from(user: UserResponse) -> Self {
         Self {
             name: user.name,
             avatar: user.avatar_url,
@@ -42,23 +38,4 @@ impl From<GetUserResponse> for UserInformation {
             company: user.company,
         }
     }
-}
-
-pub async fn get_user(
-    api_base: &Url,
-    client: &Client,
-    access_token: &str,
-) -> Result<GetUserResponse, GithubApiError> {
-    let response = client
-        .get(api_base.join("user")?)
-        .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
-        .send()
-        .await?;
-
-    GithubApiError::match_status_code(response.status())?;
-
-    response
-        .json::<GetUserResponse>()
-        .await
-        .map_err(GithubApiError::Response)
 }
