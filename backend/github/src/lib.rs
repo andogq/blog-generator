@@ -1,8 +1,10 @@
 mod api;
 mod auth;
+mod projects;
 mod user;
 
 use axum::http::{HeaderMap, HeaderValue};
+use projects::repos::GithubProjectsRepos;
 use reqwest::{
     header::{self, InvalidHeaderValue},
     Client,
@@ -11,7 +13,7 @@ use reqwest::{
 use shared::{
     environment::Environment,
     get_from_environment,
-    plugin::{AuthPlugin, PluginCollection, PluginError, UserPlugin},
+    plugin::{AuthPlugin, PluginCollection, PluginError, ProjectsPlugin, UserPlugin},
     source::Source,
 };
 
@@ -75,7 +77,13 @@ impl Source for Github {
             )]
             .into_iter()
             .collect(),
-            project: Vec::new(),
+            project: [(
+                "repos".to_string(),
+                Box::new(GithubProjectsRepos::new(&self.config, &self.client))
+                    as Box<dyn ProjectsPlugin>,
+            )]
+            .into_iter()
+            .collect(),
         }
     }
 }

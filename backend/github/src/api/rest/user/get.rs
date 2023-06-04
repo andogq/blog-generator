@@ -8,15 +8,15 @@ use crate::api::{rest::API_BASE, GithubApiError};
 #[derive(Deserialize)]
 pub struct GetUserResponse {
     pub login: String,
-    avatar_url: String,
-    html_url: String,
-    name: Option<String>,
-    company: Option<String>,
-    blog: Option<String>,
-    location: Option<String>,
-    email: Option<String>,
-    bio: Option<String>,
-    twitter_username: Option<String>,
+    pub avatar_url: String,
+    pub html_url: String,
+    pub name: Option<String>,
+    pub company: Option<String>,
+    pub blog: Option<String>,
+    pub location: Option<String>,
+    pub email: Option<String>,
+    pub bio: Option<String>,
+    pub twitter_username: Option<String>,
 }
 
 impl From<GetUserResponse> for UserInformation {

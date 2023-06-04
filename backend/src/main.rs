@@ -28,7 +28,7 @@ enum BackendError {
 }
 
 #[derive(Deserialize)]
-struct UserRequestPath {
+struct UsernamePathParams {
     username: String,
 }
 
@@ -119,7 +119,7 @@ async fn main() -> Result<(), BackendError> {
 
                     router.route(
                         &format!("/{identifier}/{plugin_identifier}/:username"),
-                        get(|Path(params): Path<UserRequestPath>| async move {
+                        get(|Path(params): Path<UsernamePathParams>| async move {
                             // Extract user authentication token
                             let auth_token = authentication_storage
                                 .read()
@@ -146,6 +146,34 @@ async fn main() -> Result<(), BackendError> {
                     router.nest(
                         &format!("/{identifier}/{plugin_identifier}"),
                         source.register_routes(&identifier, save_auth_token.clone()),
+                    )
+                },
+            ),
+        )
+        .nest(
+            "/projects",
+            project_plugins.into_iter().fold(
+                Router::new(),
+                |router, (identifier, plugin_identifier, source)| {
+                    let source = Arc::new(source);
+                    let authentication_storage = Arc::clone(&authentication_storage);
+
+                    router.route(
+                        &format!("/{identifier}/{plugin_identifier}/:username"),
+                        get(|Path(params): Path<UsernamePathParams>| async move {
+                            let auth_token = authentication_storage
+                                .read()
+                                .await
+                                .get(&(identifier.to_string(), params.username.clone()))
+                                .cloned();
+
+                            if let Some(auth_token) = auth_token {
+                                Json(source.get_projects(&params.username, &auth_token).await)
+                                    .into_response()
+                            } else {
+                                StatusCode::NOT_FOUND.into_response()
+                            }
+                        }),
                     )
                 },
             ),
