@@ -2,22 +2,23 @@ use std::{collections::HashMap, sync::Arc};
 
 use axum::extract::Path;
 use axum::response::IntoResponse;
-use axum::Json;
 use axum::{routing::get, Router, Server};
+use axum::{Extension, Json};
 use reqwest::StatusCode;
-use sea_orm::{ActiveModelTrait, ConnectOptions, Database, DbErr, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, ConnectOptions, Database, DbErr, Set};
 use serde::Deserialize;
 use shared::environment::Environment;
 use shared::plugin::{AuthTokenPayload, PluginError};
 use shared::source::Source;
 use thiserror::Error;
-use tokio::{
-    sync::{mpsc::unbounded_channel, RwLock},
-    task,
-};
+use tokio::{sync::mpsc::unbounded_channel, task};
 
-use entities::{prelude::*, user, user_source};
+use entities::{user, user_source};
 use github::Github;
+
+use crate::extractors::source_auth::SourceAuth;
+
+mod extractors;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -32,8 +33,9 @@ enum BackendError {
 }
 
 #[derive(Deserialize)]
-struct UsernamePathParams {
-    username: String,
+struct PluginPathParams {
+    request_type: String,
+    plugin_identifier: String,
 }
 
 #[tokio::main]
@@ -66,7 +68,7 @@ async fn main() -> Result<(), BackendError> {
     )]
     .into_iter()
     .fold(
-        (vec![], vec![], vec![]),
+        (vec![], HashMap::new(), HashMap::new()),
         |(mut auth_plugins, mut user_plugins, mut project_plugins), (identifier, source)| {
             let plugins = source.get_plugins();
 
@@ -84,25 +86,23 @@ async fn main() -> Result<(), BackendError> {
                     .user
                     .into_iter()
                     .map(|(plugin_identifier, source)| {
-                        (identifier.to_string(), plugin_identifier, source)
+                        ((identifier.to_string(), plugin_identifier), source)
                     })
-                    .collect::<Vec<_>>(),
+                    .collect::<HashMap<_, _>>(),
             );
             project_plugins.extend(
                 plugins
                     .project
                     .into_iter()
                     .map(|(plugin_identifier, source)| {
-                        (identifier.to_string(), plugin_identifier, source)
+                        ((identifier.to_string(), plugin_identifier), source)
                     })
-                    .collect::<Vec<_>>(),
+                    .collect::<HashMap<_, _>>(),
             );
 
             (auth_plugins, user_plugins, project_plugins)
         },
     );
-
-    let authentication_storage = Arc::new(RwLock::new(HashMap::<(String, String), String>::new()));
 
     {
         let db = db.clone();
@@ -138,38 +138,40 @@ async fn main() -> Result<(), BackendError> {
         });
     }
 
+    let user_plugins = Arc::new(user_plugins);
+    let project_plugins = Arc::new(project_plugins);
+
     let router = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
-        .nest(
-            "/user",
-            user_plugins.into_iter().fold(
-                Router::new(),
-                |router, (identifier, plugin_identifier, source)| {
-                    let source = Arc::new(source);
-                    let db = db.clone();
+        .route(
+            "/:request_type/:source_identifier/:plugin_identifier/:username",
+            get(
+                |user_auth: SourceAuth, Path(plugin_params): Path<PluginPathParams>| async move {
+                    let plugin_identifier = &(user_auth.source, plugin_params.plugin_identifier);
 
-                    router.route(
-                        &format!("/{identifier}/{plugin_identifier}/:username"),
-                        get(|Path(params): Path<UsernamePathParams>| async move {
-                            // Extract user authentication token
-                            let auth_token =
-                                UserSource::find_by_id((params.username.clone(), identifier))
-                                    .one(db.as_ref())
-                                    .await;
-
-                            match auth_token {
-                                Ok(Some(auth_token)) => {
-                                    Json(source.get_user(&params.username, &auth_token.token).await)
-                                        .into_response()
-                                }
-                                Ok(None) => StatusCode::NOT_FOUND.into_response(),
-                                Err(e) => {
-                                    eprintln!("Problem with db: {e}");
-                                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                                }
+                    match plugin_params.request_type.as_str() {
+                        "user" => {
+                            if let Some(user) = user_plugins.get(plugin_identifier).map(|plugin| {
+                                plugin.get_user(&user_auth.username, &user_auth.token)
+                            }) {
+                                Json(user.await).into_response()
+                            } else {
+                                StatusCode::NOT_FOUND.into_response()
                             }
-                        }),
-                    )
+                        }
+                        "projects" => {
+                            if let Some(project) =
+                                project_plugins.get(plugin_identifier).map(|plugin| {
+                                    plugin.get_projects(&user_auth.username, &user_auth.token)
+                                })
+                            {
+                                Json(project.await).into_response()
+                            } else {
+                                StatusCode::NOT_FOUND.into_response()
+                            }
+                        }
+                        _ => StatusCode::NOT_FOUND.into_response(),
+                    }
                 },
             ),
         )
@@ -185,34 +187,7 @@ async fn main() -> Result<(), BackendError> {
                 },
             ),
         )
-        .nest(
-            "/projects",
-            project_plugins.into_iter().fold(
-                Router::new(),
-                |router, (identifier, plugin_identifier, source)| {
-                    let source = Arc::new(source);
-                    let authentication_storage = Arc::clone(&authentication_storage);
-
-                    router.route(
-                        &format!("/{identifier}/{plugin_identifier}/:username"),
-                        get(|Path(params): Path<UsernamePathParams>| async move {
-                            let auth_token = authentication_storage
-                                .read()
-                                .await
-                                .get(&(identifier.to_string(), params.username.clone()))
-                                .cloned();
-
-                            if let Some(auth_token) = auth_token {
-                                Json(source.get_projects(&params.username, &auth_token).await)
-                                    .into_response()
-                            } else {
-                                StatusCode::NOT_FOUND.into_response()
-                            }
-                        }),
-                    )
-                },
-            ),
-        );
+        .layer(Extension(db));
 
     println!("Starting server on port 3000");
     Server::bind(&"0.0.0.0:3000".parse().unwrap())

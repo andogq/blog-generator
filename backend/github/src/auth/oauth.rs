@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Query, State},
+    extract::Query,
     response::{IntoResponse, Redirect},
     routing::get,
     Router,
@@ -58,7 +58,11 @@ impl IntoResponse for OAuthHandlerError {
 }
 
 impl AuthPlugin for GithubOAuth {
-    fn register_routes(&self, source_identifier: &str, save_auth_token: SaveAuthToken) -> Router {
+    fn register_routes(
+        &self,
+        source_identifier: &str,
+        save_auth_token: SaveAuthToken,
+    ) -> Router<()> {
         let state = AuthState {
             save_auth_token,
             source_identifier: Arc::new(source_identifier.to_string()),
@@ -67,9 +71,14 @@ impl AuthPlugin for GithubOAuth {
         };
 
         Router::new()
-            .route("/oauth", get(handle_oauth))
-            .route("/redirect", get(handle_redirect))
-            .with_state(state)
+            .route(
+                "/oauth",
+                get({
+                    let state = state.clone();
+                    move |params| handle_oauth(state, params)
+                }),
+            )
+            .route("/redirect", get(move || handle_redirect(state)))
     }
 }
 
@@ -79,7 +88,7 @@ struct OauthQueryParams {
 }
 
 async fn handle_oauth(
-    State(state): State<AuthState>,
+    state: AuthState,
     params: Query<OauthQueryParams>,
 ) -> Result<StatusCode, OAuthHandlerError> {
     let access_token = state
@@ -102,7 +111,7 @@ async fn handle_oauth(
     Ok(StatusCode::OK)
 }
 
-async fn handle_redirect(State(state): State<AuthState>) -> Result<Redirect, OAuthHandlerError> {
+async fn handle_redirect(state: AuthState) -> Result<Redirect, OAuthHandlerError> {
     state
         .oauth_api
         .generate_redirect_url(
