@@ -6,4 +6,4 @@ wasm-pack.log
 
 backend/target
 
-.env.dev
+.env

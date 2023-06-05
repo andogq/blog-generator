@@ -5,6 +5,7 @@ use axum::response::IntoResponse;
 use axum::Json;
 use axum::{routing::get, Router, Server};
 use reqwest::StatusCode;
+use sea_orm::{ActiveModelTrait, ConnectOptions, Database, DbErr, EntityTrait, Set};
 use serde::Deserialize;
 use shared::environment::Environment;
 use shared::plugin::{AuthTokenPayload, PluginError};
@@ -15,6 +16,7 @@ use tokio::{
     task,
 };
 
+use entities::{prelude::*, user, user_source};
 use github::Github;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -25,6 +27,8 @@ enum BackendError {
     DotEnv(#[from] dotenvy::Error),
     #[error("plugin error: {0}")]
     Plugin(#[from] PluginError),
+    #[error("DB error: {0}")]
+    Db(#[from] DbErr),
 }
 
 #[derive(Deserialize)]
@@ -39,7 +43,7 @@ async fn main() -> Result<(), BackendError> {
         // Load env variables from file
         println!("Starting in dev mode");
 
-        dotenvy::from_filename("../.env.dev")?;
+        dotenvy::from_filename("../.env")?;
     }
 
     let environment = {
@@ -47,6 +51,12 @@ async fn main() -> Result<(), BackendError> {
         environment.extend([("USER_AGENT".to_string(), APP_USER_AGENT.to_string())].into_iter());
         environment
     };
+
+    let mut opt = ConnectOptions::new(environment.get("DATABASE_URL").unwrap().clone());
+    opt.max_connections(100)
+        .min_connections(5)
+        .sqlx_logging(true);
+    let db = Arc::new(Database::connect(opt).await?);
 
     let (save_auth_token, mut save_auth_token_rx) = unbounded_channel::<AuthTokenPayload>();
 
@@ -95,14 +105,35 @@ async fn main() -> Result<(), BackendError> {
     let authentication_storage = Arc::new(RwLock::new(HashMap::<(String, String), String>::new()));
 
     {
-        let authentication_storage = Arc::clone(&authentication_storage);
+        let db = db.clone();
         task::spawn(async move {
             while let Some(auth_token) = save_auth_token_rx.recv().await {
-                let (key, value) = auth_token.to_key_value();
+                println!("Adding {}: {}", auth_token.source, auth_token.username);
 
-                println!("Adding: {key:?}");
+                // Create user in DB
+                let user = user::ActiveModel {
+                    ..Default::default()
+                };
 
-                authentication_storage.write().await.insert(key, value);
+                if let Ok(user) = user.insert(db.as_ref()).await {
+                    // Add to user source
+                    let user_source = user_source::ActiveModel {
+                        user_id: Set(user.id),
+                        site: Set(auth_token.source),
+                        username: Set(auth_token.username),
+                        token: Set(auth_token.auth_token),
+                        ..Default::default()
+                    };
+
+                    if let Ok(user_source) = user_source.insert(db.as_ref()).await {
+                        println!("Successfully created");
+                        dbg!(user_source);
+                    } else {
+                        eprintln!("Problem creating user source");
+                    }
+                } else {
+                    eprintln!("Problem creating user");
+                }
             }
         });
     }
@@ -115,23 +146,27 @@ async fn main() -> Result<(), BackendError> {
                 Router::new(),
                 |router, (identifier, plugin_identifier, source)| {
                     let source = Arc::new(source);
-                    let authentication_storage = Arc::clone(&authentication_storage);
+                    let db = db.clone();
 
                     router.route(
                         &format!("/{identifier}/{plugin_identifier}/:username"),
                         get(|Path(params): Path<UsernamePathParams>| async move {
                             // Extract user authentication token
-                            let auth_token = authentication_storage
-                                .read()
-                                .await
-                                .get(&(identifier.to_string(), params.username.clone()))
-                                .cloned();
+                            let auth_token =
+                                UserSource::find_by_id((params.username.clone(), identifier))
+                                    .one(db.as_ref())
+                                    .await;
 
-                            if let Some(auth_token) = auth_token {
-                                Json(source.get_user(&params.username, &auth_token).await)
-                                    .into_response()
-                            } else {
-                                StatusCode::NOT_FOUND.into_response()
+                            match auth_token {
+                                Ok(Some(auth_token)) => {
+                                    Json(source.get_user(&params.username, &auth_token.token).await)
+                                        .into_response()
+                                }
+                                Ok(None) => StatusCode::NOT_FOUND.into_response(),
+                                Err(e) => {
+                                    eprintln!("Problem with db: {e}");
+                                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                                }
                             }
                         }),
                     )

@@ -10,10 +10,11 @@ pub use auth::*;
 pub use projects::*;
 pub use user::*;
 
+#[derive(Clone)]
 pub struct AuthTokenPayload {
-    source: String,
-    username: String,
-    auth_token: String,
+    pub source: String,
+    pub username: String,
+    pub auth_token: String,
 }
 impl AuthTokenPayload {
     pub fn new(source: &str, username: &str, auth_token: &str) -> Self {

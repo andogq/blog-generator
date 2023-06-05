@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["github", "shared"]
+members = ["github", "shared", "migration", "entities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,6 +19,9 @@ tokio = { version = "1.28.1", features = ["macros", "rt-multi-thread"] }
 url = "2.3.1"
 github = { path = "github" }
 shared = { path = "shared" }
+entities = { path = "entities" }
+migration = { path = "migration" }
+sea-orm = { version = "0.11.3", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
 
 [features]
 dev = []
