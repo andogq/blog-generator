@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::async_trait;
-use shared::plugin::{UserInformation, UserPlugin};
+use shared::plugin::{DataPlugin, PluginError, UserResponse};
 
 use crate::api::rest::RestApi;
 
@@ -18,9 +18,10 @@ impl GithubUserProfile {
 }
 
 #[async_trait]
-impl UserPlugin for GithubUserProfile {
-    async fn get_user(&self, _username: &str, auth_token: &str) -> UserInformation {
-        // TODO: Don't do this :(
-        self.rest_api.user.get(auth_token).await.unwrap().into()
+impl DataPlugin for GithubUserProfile {
+    type D = UserResponse;
+
+    async fn get_data(&self, _username: &str, auth_token: &str) -> Result<Self::D, PluginError> {
+        Ok(self.rest_api.user.get(auth_token).await?.into())
     }
 }

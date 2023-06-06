@@ -16,7 +16,7 @@ use reqwest::{
 use shared::{
     environment::Environment,
     get_from_environment,
-    plugin::{AuthPlugin, PluginCollection, PluginError, ProjectsPlugin, UserPlugin},
+    plugin::{AuthPlugin, Plugin, SourceError, ToPlugin},
     source::Source,
 };
 
@@ -28,7 +28,7 @@ pub struct Github {
     oauth_api: Arc<OauthApi>,
 }
 impl Github {
-    pub fn from_environment(environment: &Environment) -> Result<Self, PluginError> {
+    pub fn from_environment(environment: &Environment) -> Result<Self, SourceError> {
         let config = GithubConfig::from_environment(environment)?;
 
         let client = Client::builder()
@@ -42,7 +42,7 @@ impl Github {
             .user_agent(
                 environment
                     .get("USER_AGENT")
-                    .ok_or(PluginError::MissingEnvVar("USER_AGENT".to_string()))?,
+                    .ok_or(SourceError::MissingEnvVar("USER_AGENT".to_string()))?,
             )
             .build()
             .unwrap();
@@ -70,7 +70,7 @@ pub struct GithubConfig {
     oauth_base: Url,
 }
 impl GithubConfig {
-    pub fn from_environment(environment: &Environment) -> Result<Self, PluginError> {
+    pub fn from_environment(environment: &Environment) -> Result<Self, SourceError> {
         Ok(Self {
             client_secret: get_from_environment!(environment, "GITHUB_CLIENT_SECRET"),
             client_id: get_from_environment!(environment, "GITHUB_CLIENT_ID"),
@@ -81,32 +81,27 @@ impl GithubConfig {
 }
 
 impl Source for Github {
-    fn get_plugins(&self) -> PluginCollection {
-        PluginCollection {
-            auth: [(
-                "oauth".to_string(),
-                Box::new(GithubOAuth::new(&self.rest_api, &self.oauth_api)) as Box<dyn AuthPlugin>,
-            )]
-            .into_iter()
-            .collect(),
-            user: [(
+    fn get_auth_plugins(&self) -> Vec<(String, Box<dyn AuthPlugin>)> {
+        vec![(
+            "oauth".to_string(),
+            Box::new(GithubOAuth::new(&self.rest_api, &self.oauth_api)) as Box<dyn AuthPlugin>,
+        )]
+    }
+
+    fn get_plugins(&self) -> Vec<(String, Plugin)> {
+        vec![
+            (
                 "profile".to_string(),
-                Box::new(GithubUserProfile::new(&self.rest_api)) as Box<dyn UserPlugin>,
-            )]
-            .into_iter()
-            .collect(),
-            project: [
-                (
-                    "repos".to_string(),
-                    Box::new(GithubProjectsRepos::new(&self.rest_api)) as Box<dyn ProjectsPlugin>,
-                ),
-                (
-                    "repo_topics".to_string(),
-                    Box::new(RepoTags::new(&self.rest_api)) as Box<dyn ProjectsPlugin>,
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        }
+                GithubUserProfile::new(&self.rest_api).to_plugin(),
+            ),
+            (
+                "repos".to_string(),
+                GithubProjectsRepos::new(&self.rest_api).to_plugin(),
+            ),
+            (
+                "repos_topics".to_string(),
+                RepoTags::new(&self.rest_api).to_plugin(),
+            ),
+        ]
     }
 }

@@ -1,4 +1,3 @@
-use axum::async_trait;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -11,7 +10,7 @@ pub struct Repo {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ProjectInformation {
+pub struct ProjectResponse {
     pub name: String,
     pub description: Option<String>,
     pub url: Option<String>,
@@ -20,7 +19,4 @@ pub struct ProjectInformation {
     pub languages: Option<Vec<String>>,
 }
 
-#[async_trait]
-pub trait ProjectsPlugin: Send + Sync {
-    async fn get_projects(&self, username: &str, auth_token: &str) -> Vec<ProjectInformation>;
-}
+pub type ProjectsResponse = Vec<ProjectResponse>;

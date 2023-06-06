@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use shared::plugin::UserInformation;
 
 #[derive(Deserialize)]
 pub struct UserResponse {
@@ -15,7 +14,7 @@ pub struct UserResponse {
     pub twitter_username: Option<String>,
 }
 
-impl From<UserResponse> for UserInformation {
+impl From<UserResponse> for shared::plugin::UserResponse {
     fn from(user: UserResponse) -> Self {
         Self {
             name: user.name,

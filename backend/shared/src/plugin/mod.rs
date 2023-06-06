@@ -1,86 +1,119 @@
-use axum::Router;
+use axum::{http::StatusCode, response::IntoResponse, Json};
+use serde::Serialize;
 use thiserror::Error;
-use tokio::sync::mpsc::UnboundedSender;
 
 mod auth;
-mod projects;
-mod user;
+mod data;
+mod response;
 
 pub use auth::*;
-pub use projects::*;
-pub use user::*;
+pub use data::*;
+pub use response::*;
 
-#[derive(Clone)]
-pub struct AuthTokenPayload {
-    pub source: String,
-    pub username: String,
-    pub auth_token: String,
+type UserPlugin = Box<dyn DataPlugin<D = UserResponse>>;
+type ProjectsPlugin = Box<dyn DataPlugin<D = ProjectsResponse>>;
+
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum PluginResponse {
+    User(UserResponse),
+    Projects(ProjectsResponse),
 }
-impl AuthTokenPayload {
-    pub fn new(source: &str, username: &str, auth_token: &str) -> Self {
-        Self {
-            source: source.to_string(),
-            username: username.to_string(),
-            auth_token: auth_token.to_string(),
+impl IntoResponse for PluginResponse {
+    fn into_response(self) -> axum::response::Response {
+        Json(self).into_response()
+    }
+}
+
+pub enum Plugin {
+    User(UserPlugin),
+    Projects(ProjectsPlugin),
+}
+
+impl Plugin {
+    pub fn request_type(&self) -> String {
+        match self {
+            Self::User(_) => "user",
+            Self::Projects(_) => "projects",
         }
+        .to_string()
     }
+    pub async fn get_data(
+        &self,
+        username: &str,
+        auth_token: &str,
+    ) -> Result<PluginResponse, PluginError> {
+        macro_rules! expand_plugins {
+            ($($plugin:ident),*) => {
+                match self {
+                    $(
+                      Self::$plugin(plugin) => plugin.get_data(username, auth_token)
+                          .await
+                          .map(PluginResponse::$plugin)
+                    ),*
+                }
+            };
+        }
 
-    pub fn to_key_value(self) -> ((String, String), String) {
-        ((self.source, self.username), self.auth_token)
-    }
-}
-
-pub type SaveAuthToken = UnboundedSender<AuthTokenPayload>;
-
-#[derive(Default)]
-pub struct PluginCollection {
-    pub auth: Vec<(String, Box<dyn AuthPlugin>)>,
-    pub user: Vec<(String, Box<dyn UserPlugin>)>,
-    pub project: Vec<(String, Box<dyn ProjectsPlugin>)>,
-}
-
-impl PluginCollection {
-    pub fn build_router(
-        &mut self,
-        source_identifier: &str,
-        save_auth_token: SaveAuthToken,
-    ) -> Router {
-        std::mem::take(&mut self.auth).into_iter().fold(
-            Router::new(),
-            |router, (identifier, auth_plugin)| {
-                router.nest(
-                    &format!("/{}", identifier),
-                    auth_plugin.register_routes(source_identifier, save_auth_token.clone()),
-                )
-            },
-        )
+        expand_plugins!(User, Projects)
     }
 }
 
-impl FromIterator<PluginCollection> for PluginCollection {
-    fn from_iter<T: IntoIterator<Item = PluginCollection>>(iter: T) -> Self {
-        iter.into_iter()
-            .reduce(|mut combined, mut source| {
-                combined
-                    .auth
-                    .extend(std::mem::take(&mut source.auth).into_iter());
-                combined
-                    .user
-                    .extend(std::mem::take(&mut source.user).into_iter());
-                combined
-                    .project
-                    .extend(std::mem::take(&mut source.project).into_iter());
+pub trait ToPlugin {
+    fn to_plugin(self) -> Plugin;
+}
 
-                combined
-            })
-            .unwrap_or_default()
+// Trait magic: https://stackoverflow.com/a/40408431
+trait InnerToPlugin<P> {
+    fn to_plugin(plugin: P) -> Plugin;
+}
+
+impl<P> ToPlugin for P
+where
+    P: DataPlugin,
+    <P as DataPlugin>::D: InnerToPlugin<P>,
+{
+    fn to_plugin(self) -> Plugin {
+        <<P as DataPlugin>::D as InnerToPlugin<P>>::to_plugin(self)
     }
 }
+
+macro_rules! impl_to_plugin {
+    ($($plugin:ident: $response:ident),*) => {
+        $(
+            impl<P> InnerToPlugin<P> for $response
+            where
+                P: DataPlugin<D = $response> + 'static,
+            {
+                fn to_plugin(plugin: P) -> Plugin {
+                    Plugin::$plugin(Box::new(plugin))
+                }
+            }
+        )*
+    };
+}
+
+impl_to_plugin!(User: UserResponse, Projects: ProjectsResponse);
 
 #[derive(Debug, Error)]
 pub enum PluginError {
-    #[error("missing environment variable {0}")]
-    MissingEnvVar(String),
-    #[error("invalid url: {0}")]
-    UrlParse(#[from] url::ParseError),
+    #[error("requested resource is not found")]
+    NotFound,
+    #[error("not authorised to access requested resource")]
+    NotAuthorised,
+    #[error("an external provider could not fulfill the request")]
+    External,
+    #[error("an internal error occurred")]
+    Internal,
+}
+
+impl IntoResponse for PluginError {
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            PluginError::NotFound => StatusCode::NOT_FOUND.into_response(),
+            PluginError::NotAuthorised => StatusCode::UNAUTHORIZED.into_response(),
+            PluginError::External => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            PluginError::Internal => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
 }

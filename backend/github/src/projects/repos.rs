@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::async_trait;
-use shared::plugin::{ProjectInformation, ProjectsPlugin};
+use shared::plugin::{DataPlugin, PluginError, ProjectsResponse};
 
 use crate::api::rest::RestApi;
 
@@ -17,15 +17,17 @@ impl GithubProjectsRepos {
 }
 
 #[async_trait]
-impl ProjectsPlugin for GithubProjectsRepos {
-    async fn get_projects(&self, _username: &str, auth_token: &str) -> Vec<ProjectInformation> {
-        self.rest_api
+impl DataPlugin for GithubProjectsRepos {
+    type D = ProjectsResponse;
+
+    async fn get_data(&self, _username: &str, auth_token: &str) -> Result<Self::D, PluginError> {
+        Ok(self
+            .rest_api
             .repositories
             .list(auth_token)
-            .await
-            .unwrap()
+            .await?
             .iter()
             .map(|repo| repo.into())
-            .collect()
+            .collect())
     }
 }

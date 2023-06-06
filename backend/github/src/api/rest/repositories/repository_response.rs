@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use shared::plugin::{ProjectInformation, Repo};
+use shared::plugin::{ProjectResponse, Repo};
 
 #[derive(Deserialize)]
 pub struct RepositoryResponse {
@@ -28,7 +28,7 @@ impl From<&RepositoryResponse> for Repo {
     }
 }
 
-impl From<&RepositoryResponse> for ProjectInformation {
+impl From<&RepositoryResponse> for ProjectResponse {
     fn from(repository: &RepositoryResponse) -> Self {
         Self {
             name: repository.name.clone(),
