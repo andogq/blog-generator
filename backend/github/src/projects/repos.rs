@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::async_trait;
-use shared::plugin::{DataPlugin, PluginError, ProjectsResponse};
+use shared::plugin::{DataPlugin, PluginError, PluginIdentifier, ProjectsResponse};
 
 use crate::api::rest::RestApi;
 
@@ -29,5 +29,9 @@ impl DataPlugin for GithubProjectsRepos {
             .iter()
             .map(|repo| repo.into())
             .collect())
+    }
+
+    fn get_identifier(&self) -> PluginIdentifier {
+        PluginIdentifier::new("repos")
     }
 }

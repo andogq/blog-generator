@@ -8,7 +8,7 @@ use axum::{
 };
 use reqwest::StatusCode;
 use serde::Deserialize;
-use shared::plugin::{AuthPlugin, AuthTokenPayload, SaveAuthToken};
+use shared::plugin::{AuthPlugin, AuthTokenPayload, PluginIdentifier, SaveAuthToken};
 use thiserror::Error;
 
 use crate::api::{
@@ -79,6 +79,10 @@ impl AuthPlugin for GithubOAuth {
                 }),
             )
             .route("/redirect", get(move || handle_redirect(state)))
+    }
+
+    fn get_identifier(&self) -> PluginIdentifier {
+        PluginIdentifier::new("oauth")
     }
 }
 

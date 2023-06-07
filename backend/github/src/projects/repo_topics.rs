@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use axum::async_trait;
-use shared::plugin::{DataPlugin, PluginError, ProjectResponse, ProjectsResponse};
+use shared::plugin::{
+    DataPlugin, PluginError, PluginIdentifier, ProjectResponse, ProjectsResponse,
+};
 
 use crate::api::rest::RestApi;
 
@@ -31,5 +33,9 @@ impl DataPlugin for RepoTags {
             .iter()
             .map(ProjectResponse::from)
             .collect())
+    }
+
+    fn get_identifier(&self) -> PluginIdentifier {
+        PluginIdentifier::new("repo_topics")
     }
 }

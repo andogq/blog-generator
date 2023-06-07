@@ -7,8 +7,8 @@ use reqwest::StatusCode;
 use sea_orm::{ActiveModelTrait, ConnectOptions, Database, DbErr, EntityTrait, Set};
 use serde::Deserialize;
 use shared::environment::Environment;
-use shared::plugin::{AuthTokenPayload, SourceError};
-use shared::source::Source;
+use shared::plugin::{AuthTokenPayload, PluginIdentifier, SourceError};
+use shared::source::{Source, SourceIdentifier};
 use thiserror::Error;
 use tokio::{sync::mpsc::unbounded_channel, task};
 
@@ -59,36 +59,29 @@ async fn main() -> Result<(), BackendError> {
 
     let (save_auth_token, mut save_auth_token_rx) = unbounded_channel::<AuthTokenPayload>();
 
-    let (auth_plugins, plugins) =
-        [(
-            "github".to_string(),
-            Github::from_environment(&environment)?,
-        )]
-        .into_iter()
-        .fold(
-            (Vec::new(), HashMap::new()),
-            |(mut auth_plugins, mut plugins), (source_identifier, source)| {
-                auth_plugins.extend(source.get_auth_plugins().into_iter().map(
-                    |(plugin_identifier, plugin)| {
-                        (source_identifier.clone(), plugin_identifier, plugin)
-                    },
-                ));
-                plugins.extend(source.get_plugins().into_iter().map(
-                    |(plugin_identifier, plugin)| {
-                        (
-                            (
-                                plugin.request_type(),
-                                source_identifier.clone(),
-                                plugin_identifier,
-                            ),
-                            plugin,
-                        )
-                    },
-                ));
+    let (auth_plugins, plugins) = [Github::from_environment(&environment)?].into_iter().fold(
+        (Vec::new(), HashMap::new()),
+        |(mut auth_plugins, mut plugins), source| {
+            auth_plugins.extend(
+                source
+                    .get_auth_plugins()
+                    .into_iter()
+                    .map(|plugin| (source.get_identifier(), plugin.get_identifier(), plugin)),
+            );
+            plugins.extend(source.get_plugins().into_iter().map(|plugin| {
+                (
+                    (
+                        plugin.request_type(),
+                        source.get_identifier(),
+                        plugin.get_identifier(),
+                    ),
+                    plugin,
+                )
+            }));
 
-                (auth_plugins, plugins)
-            },
-        );
+            (auth_plugins, plugins)
+        },
+    );
 
     {
         let db = db.clone();
@@ -147,8 +140,8 @@ async fn main() -> Result<(), BackendError> {
                     let plugin = plugins
                         .get(&(
                             params.request_type.to_string(),
-                            params.source_identifier.to_string(),
-                            params.plugin_identifier.to_string(),
+                            SourceIdentifier::new(&params.source_identifier),
+                            PluginIdentifier::new(&params.plugin_identifier),
                         ))
                         .ok_or(StatusCode::NOT_FOUND);
 
@@ -169,7 +162,7 @@ async fn main() -> Result<(), BackendError> {
                 Router::new(),
                 |router, (source_identifier, plugin_identifier, plugin)| {
                     router.nest(
-                        &format!("/{source_identifier}/{plugin_identifier}"),
+                        &format!("/{}/{}", source_identifier, plugin_identifier),
                         plugin.register_routes(&source_identifier, save_auth_token.clone()),
                     )
                 },

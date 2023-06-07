@@ -17,7 +17,7 @@ use shared::{
     environment::Environment,
     get_from_environment,
     plugin::{AuthPlugin, Plugin, SourceError, ToPlugin},
-    source::Source,
+    source::{Source, SourceIdentifier},
 };
 
 use auth::oauth::GithubOAuth;
@@ -81,27 +81,19 @@ impl GithubConfig {
 }
 
 impl Source for Github {
-    fn get_auth_plugins(&self) -> Vec<(String, Box<dyn AuthPlugin>)> {
-        vec![(
-            "oauth".to_string(),
-            Box::new(GithubOAuth::new(&self.rest_api, &self.oauth_api)) as Box<dyn AuthPlugin>,
-        )]
+    fn get_identifier(&self) -> SourceIdentifier {
+        SourceIdentifier::new("github")
     }
 
-    fn get_plugins(&self) -> Vec<(String, Plugin)> {
+    fn get_plugins(&self) -> Vec<Plugin> {
         vec![
-            (
-                "profile".to_string(),
-                GithubUserProfile::new(&self.rest_api).to_plugin(),
-            ),
-            (
-                "repos".to_string(),
-                GithubProjectsRepos::new(&self.rest_api).to_plugin(),
-            ),
-            (
-                "repos_topics".to_string(),
-                RepoTags::new(&self.rest_api).to_plugin(),
-            ),
+            GithubUserProfile::new(&self.rest_api).to_plugin(),
+            GithubProjectsRepos::new(&self.rest_api).to_plugin(),
+            RepoTags::new(&self.rest_api).to_plugin(),
         ]
+    }
+
+    fn get_auth_plugins(&self) -> Vec<Box<dyn AuthPlugin>> {
+        vec![Box::new(GithubOAuth::new(&self.rest_api, &self.oauth_api)) as Box<dyn AuthPlugin>]
     }
 }

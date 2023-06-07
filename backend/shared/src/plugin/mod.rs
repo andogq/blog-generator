@@ -1,5 +1,6 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
+use std::{fmt::Display, ops::Deref};
 use thiserror::Error;
 
 mod auth;
@@ -9,6 +10,26 @@ mod response;
 pub use auth::*;
 pub use data::*;
 pub use response::*;
+
+#[derive(Debug, Hash, PartialEq, Eq)]
+pub struct PluginIdentifier(String);
+impl PluginIdentifier {
+    pub fn new(identifier: &str) -> Self {
+        Self(identifier.to_string())
+    }
+}
+impl Deref for PluginIdentifier {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl Display for PluginIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 type UserPlugin = Box<dyn DataPlugin<D = UserResponse>>;
 type ProjectsPlugin = Box<dyn DataPlugin<D = ProjectsResponse>>;
@@ -56,6 +77,13 @@ impl Plugin {
         }
 
         expand_plugins!(User, Projects)
+    }
+
+    pub fn get_identifier(&self) -> PluginIdentifier {
+        match self {
+            Self::User(plugin) => plugin.get_identifier(),
+            Self::Projects(plugin) => plugin.get_identifier(),
+        }
     }
 }
 

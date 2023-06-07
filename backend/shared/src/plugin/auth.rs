@@ -2,12 +2,15 @@ use axum::Router;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 
+use super::PluginIdentifier;
+
 pub trait AuthPlugin {
     fn register_routes(
         &self,
         source_identifier: &str,
         save_auth_token: SaveAuthToken,
     ) -> Router<()>;
+    fn get_identifier(&self) -> PluginIdentifier;
 }
 
 #[derive(Clone)]
