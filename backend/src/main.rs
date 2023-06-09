@@ -57,7 +57,7 @@ async fn main() -> Result<(), BackendError> {
         // Load env variables from file
         info!("Starting in dev mode");
 
-        dotenvy::from_filename("../.env")?;
+        dotenvy::from_filename("../.env.dev")?;
     }
 
     let environment = {
