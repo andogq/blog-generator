@@ -11,6 +11,10 @@ use shared::plugin::{AuthTokenPayload, PluginIdentifier, SourceError};
 use shared::source::{Source, SourceIdentifier};
 use thiserror::Error;
 use tokio::{sync::mpsc::unbounded_channel, task};
+use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tower_http::LatencyUnit;
+use tracing::{error, info, info_span, Level};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use entities::{user, user_source, UserSource};
 use github::Github;
@@ -37,10 +41,21 @@ struct PluginPathParams {
 
 #[tokio::main]
 async fn main() -> Result<(), BackendError> {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                "api_aggregator=trace,tower_http=debug,axum::rejectuion=trace".into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    info!("Starting API aggregator");
+
     #[cfg(feature = "dev")]
     {
         // Load env variables from file
-        println!("Starting in dev mode");
+        info!("Starting in dev mode");
 
         dotenvy::from_filename("../.env")?;
     }
@@ -50,12 +65,14 @@ async fn main() -> Result<(), BackendError> {
         environment.extend([("USER_AGENT".to_string(), APP_USER_AGENT.to_string())].into_iter());
         environment
     };
+    info!("Loaded environment");
 
     let mut opt = ConnectOptions::new(environment.get("DATABASE_URL").unwrap().clone());
     opt.max_connections(100)
         .min_connections(5)
         .sqlx_logging(true);
     let db = Arc::new(Database::connect(opt).await?);
+    info!("Connected to database");
 
     let (save_auth_token, mut save_auth_token_rx) = unbounded_channel::<AuthTokenPayload>();
 
@@ -82,36 +99,45 @@ async fn main() -> Result<(), BackendError> {
             (auth_plugins, plugins)
         },
     );
+    info!("Loaded plugins");
 
     {
         let db = db.clone();
         task::spawn(async move {
             while let Some(auth_token) = save_auth_token_rx.recv().await {
-                println!("Adding {}: {}", auth_token.source, auth_token.username);
+                let span = info_span!("save token", source = auth_token.source);
+                let _guard = span.enter();
 
                 // Create user in DB
                 let user = user::ActiveModel {
                     ..Default::default()
                 };
 
-                if let Ok(user) = user.insert(db.as_ref()).await {
-                    // Add to user source
-                    let user_source = user_source::ActiveModel {
-                        user_id: Set(user.id),
-                        site: Set(auth_token.source),
-                        username: Set(auth_token.username),
-                        token: Set(auth_token.auth_token),
-                        ..Default::default()
-                    };
+                match user.insert(db.as_ref()).await {
+                    Ok(user) => {
+                        info!("user created in DB");
 
-                    if let Ok(user_source) = user_source.insert(db.as_ref()).await {
-                        println!("Successfully created");
-                        dbg!(user_source);
-                    } else {
-                        eprintln!("Problem creating user source");
+                        // Add to user source
+                        let user_source = user_source::ActiveModel {
+                            user_id: Set(user.id),
+                            site: Set(auth_token.source),
+                            username: Set(auth_token.username),
+                            token: Set(auth_token.auth_token),
+                            ..Default::default()
+                        };
+
+                        match user_source.insert(db.as_ref()).await {
+                            Ok(_) => {
+                                info!("token saved in Db");
+                            }
+                            Err(e) => {
+                                error!(message = "unable to save auth token to DB", error = ?e);
+                            }
+                        }
                     }
-                } else {
-                    eprintln!("Problem creating user");
+                    Err(e) => {
+                        error!(message = "unable to create user in DB", error = ?e);
+                    }
                 }
             }
         });
@@ -167,9 +193,19 @@ async fn main() -> Result<(), BackendError> {
                     )
                 },
             ),
+        )
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new())
+                .on_request(DefaultOnRequest::new().level(Level::INFO))
+                .on_response(
+                    DefaultOnResponse::new()
+                        .level(Level::INFO)
+                        .latency_unit(LatencyUnit::Millis),
+                ),
         );
 
-    println!("Starting server on port 3000");
+    info!("Starting server on port 3000");
     Server::bind(&"0.0.0.0:3000".parse().unwrap())
         .serve(router.into_make_service())
         .await
