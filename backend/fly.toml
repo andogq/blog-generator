@@ -1,0 +1,14 @@
+# fly.toml app configuration file generated for api-aggregator on 2023-06-09T20:59:37+10:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = "api-aggregator"
+primary_region = "syd"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
