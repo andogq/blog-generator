@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use axum::extract::Path;
 use axum::response::IntoResponse;
 use axum::{routing::get, Router, Server};
-use reqwest::StatusCode;
+use reqwest::{StatusCode, Url};
 use sea_orm::{ActiveModelTrait, ConnectOptions, Database, DbErr, EntityTrait, Set};
 use serde::Deserialize;
 use shared::environment::Environment;
@@ -15,6 +15,7 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, Tr
 use tower_http::LatencyUnit;
 use tracing::{error, info, info_span, Level};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use url::ParseError;
 
 use entities::{user, user_source, UserSource};
 use github::Github;
@@ -29,6 +30,10 @@ enum BackendError {
     Source(#[from] SourceError),
     #[error("DB error: {0}")]
     Db(#[from] DbErr),
+    #[error("missing environment variable: {0}")]
+    Environment(String),
+    #[error("unable to parse URL: {0}")]
+    UrlParseError(#[from] ParseError),
 }
 
 #[derive(Deserialize)]
@@ -66,6 +71,12 @@ async fn main() -> Result<(), BackendError> {
         environment
     };
     info!("Loaded environment");
+
+    let api_root: Url = environment
+        .get("API_ROOT")
+        .ok_or(BackendError::Environment("API_ROOT".to_string()))?
+        .parse()?;
+    info!("Running at {api_root}");
 
     let mut opt = ConnectOptions::new(environment.get("DATABASE_URL").unwrap().clone());
     opt.max_connections(100)
@@ -182,18 +193,28 @@ async fn main() -> Result<(), BackendError> {
                 }
             }),
         )
-        .nest(
-            "/auth",
-            auth_plugins.into_iter().fold(
+        .nest("/auth", {
+            let auth_base = api_root.join("auth/")?;
+
+            auth_plugins.into_iter().try_fold(
                 Router::new(),
-                |router, (source_identifier, plugin_identifier, plugin)| {
-                    router.nest(
-                        &format!("/{}/{}", source_identifier, plugin_identifier),
-                        plugin.register_routes(&source_identifier, save_auth_token.clone()),
-                    )
+                |router,
+                 (source_identifier, plugin_identifier, plugin)|
+                 -> Result<Router, ParseError> {
+                    let base = format!("{}/{}/", source_identifier, plugin_identifier);
+                    let redirect_base = auth_base.join(&base)?;
+
+                    Ok(router.nest(
+                        &format!("/{base}"),
+                        plugin.register_routes(
+                            &source_identifier,
+                            &redirect_base,
+                            save_auth_token.clone(),
+                        ),
+                    ))
                 },
-            ),
-        )
+            )?
+        })
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new())

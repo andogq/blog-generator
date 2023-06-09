@@ -1,6 +1,7 @@
 use axum::Router;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
+use url::Url;
 
 use super::PluginIdentifier;
 
@@ -8,6 +9,7 @@ pub trait AuthPlugin {
     fn register_routes(
         &self,
         source_identifier: &str,
+        redirect_base: &Url,
         save_auth_token: SaveAuthToken,
     ) -> Router<()>;
     fn get_identifier(&self) -> PluginIdentifier;

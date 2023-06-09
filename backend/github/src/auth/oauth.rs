@@ -6,7 +6,7 @@ use axum::{
     routing::get,
     Router,
 };
-use reqwest::StatusCode;
+use reqwest::{StatusCode, Url};
 use serde::Deserialize;
 use shared::plugin::{AuthPlugin, AuthTokenPayload, PluginIdentifier, SaveAuthToken};
 use thiserror::Error;
@@ -37,6 +37,7 @@ struct AuthState {
     source_identifier: Arc<String>,
     rest_api: Arc<RestApi>,
     oauth_api: Arc<OauthApi>,
+    redirect_base: Arc<Url>,
 }
 
 #[derive(Debug, Error)]
@@ -61,6 +62,7 @@ impl AuthPlugin for GithubOAuth {
     fn register_routes(
         &self,
         source_identifier: &str,
+        redirect_base: &Url,
         save_auth_token: SaveAuthToken,
     ) -> Router<()> {
         let state = AuthState {
@@ -68,6 +70,7 @@ impl AuthPlugin for GithubOAuth {
             source_identifier: Arc::new(source_identifier.to_string()),
             rest_api: Arc::clone(&self.rest_api),
             oauth_api: Arc::clone(&self.oauth_api),
+            redirect_base: Arc::new(redirect_base.clone()),
         };
 
         Router::new()
@@ -120,7 +123,7 @@ async fn handle_redirect(state: AuthState) -> Result<Redirect, OAuthHandlerError
         .oauth_api
         .generate_redirect_url(
             &[Scope::ReadUser, Scope::Repo],
-            "http://localhost:3000/auth/github/oauth/oauth",
+            state.redirect_base.join("oauth")?.as_ref(),
         )
         .map(|url| Redirect::temporary(url.as_ref()))
         .map_err(OAuthHandlerError::UrlParse)
