@@ -1,9 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use axum::extract::Path;
+use axum::http::HeaderValue;
 use axum::response::IntoResponse;
 use axum::{routing::get, Router, Server};
-use reqwest::{StatusCode, Url};
+use reqwest::{header, StatusCode, Url};
 use sea_orm::{ActiveModelTrait, ConnectOptions, Database, DbErr, EntityTrait, Set};
 use serde::Deserialize;
 use shared::environment::Environment;
@@ -184,10 +185,19 @@ async fn main() -> Result<(), BackendError> {
 
                     // If user and plugin found, run it
                     match (user_source, plugin) {
-                        (Ok(user_source), Ok(plugin)) => plugin
-                            .get_data(&user_source.username, &user_source.token)
-                            .await
-                            .into_response(),
+                        (Ok(user_source), Ok(plugin)) => {
+                            let mut response = plugin
+                                .get_data(&user_source.username, &user_source.token)
+                                .await
+                                .into_response();
+
+                            response.headers_mut().extend([(
+                                header::CACHE_CONTROL,
+                                HeaderValue::from_str("public, max-age=86400").unwrap(),
+                            )]);
+
+                            response
+                        }
                         (Err(e), _) | (_, Err(e)) => e.into_response(),
                     }
                 }
