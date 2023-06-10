@@ -160,7 +160,7 @@ async fn main() -> Result<(), BackendError> {
     let router = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
         .route(
-            "/:request_type/:source_identifier/:plugin_identifier/:username",
+            "/api/:request_type/:source_identifier/:plugin_identifier/:username",
             get({
                 let db = db.clone();
                 let plugins = plugins.clone();
