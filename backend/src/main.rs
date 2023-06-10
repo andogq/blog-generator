@@ -4,7 +4,7 @@ use axum::extract::Path;
 use axum::http::HeaderValue;
 use axum::response::IntoResponse;
 use axum::{routing::get, Router, Server};
-use reqwest::{header, StatusCode, Url};
+use reqwest::{header, Method, StatusCode, Url};
 use sea_orm::{ActiveModelTrait, ConnectOptions, Database, DbErr, EntityTrait, Set};
 use serde::Deserialize;
 use shared::environment::Environment;
@@ -12,6 +12,7 @@ use shared::plugin::{AuthTokenPayload, PluginIdentifier, SourceError};
 use shared::source::{Source, SourceIdentifier};
 use thiserror::Error;
 use tokio::{sync::mpsc::unbounded_channel, task};
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 use tracing::{error, info, info_span, Level};
@@ -234,6 +235,11 @@ async fn main() -> Result<(), BackendError> {
                         .level(Level::INFO)
                         .latency_unit(LatencyUnit::Millis),
                 ),
+        )
+        .layer(
+            CorsLayer::new()
+                .allow_methods([Method::GET])
+                .allow_origin(Any),
         );
 
     info!("Starting server on port 3000");
