@@ -34,6 +34,7 @@ impl Display for PluginIdentifier {
 type UserPlugin = Box<dyn DataPlugin<D = UserResponse>>;
 type ProjectsPlugin = Box<dyn DataPlugin<D = ProjectsResponse>>;
 type BlurbPlugin = Box<dyn DataPlugin<D = BlurbResponse>>;
+type PostsPlugin = Box<dyn DataPlugin<D = PostsResponse>>;
 
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -41,6 +42,7 @@ pub enum PluginResponse {
     User(UserResponse),
     Projects(ProjectsResponse),
     Blurb(BlurbResponse),
+    Posts(PostsResponse),
 }
 impl IntoResponse for PluginResponse {
     fn into_response(self) -> axum::response::Response {
@@ -52,6 +54,7 @@ pub enum Plugin {
     User(UserPlugin),
     Projects(ProjectsPlugin),
     Blurb(BlurbPlugin),
+    Posts(PostsPlugin),
 }
 
 impl Plugin {
@@ -60,6 +63,7 @@ impl Plugin {
             Self::User(_) => "user",
             Self::Projects(_) => "projects",
             Self::Blurb(_) => "blurb",
+            Self::Posts(_) => "posts",
         }
         .to_string()
     }
@@ -80,7 +84,7 @@ impl Plugin {
             };
         }
 
-        expand_plugins!(User, Projects, Blurb)
+        expand_plugins!(User, Projects, Blurb, Posts)
     }
 
     pub fn get_identifier(&self) -> PluginIdentifier {
@@ -88,6 +92,7 @@ impl Plugin {
             Self::User(plugin) => plugin.get_identifier(),
             Self::Projects(plugin) => plugin.get_identifier(),
             Self::Blurb(plugin) => plugin.get_identifier(),
+            Self::Posts(plugin) => plugin.get_identifier(),
         }
     }
 }
@@ -129,7 +134,8 @@ macro_rules! impl_to_plugin {
 impl_to_plugin!(
     User: UserResponse,
     Projects: ProjectsResponse,
-    Blurb: BlurbResponse
+    Blurb: BlurbResponse,
+    Posts: PostsResponse
 );
 
 #[derive(Debug, Error)]
