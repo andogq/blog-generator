@@ -43,6 +43,7 @@ impl From<IssueResponse> for PostResponse {
             number: issue.number,
             title: issue.title,
             body: issue.body,
+            tags: issue.labels.into_iter().map(|label| label.name).collect(),
             created_at: issue.created_at,
             updated_at: issue.updated_at,
             original_link: issue.html_url,
