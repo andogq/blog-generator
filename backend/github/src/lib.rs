@@ -1,5 +1,6 @@
 mod api;
 mod auth;
+mod blurb;
 mod projects;
 mod user;
 
@@ -22,6 +23,8 @@ use shared::{
 
 use auth::oauth::GithubOAuth;
 use user::GithubUserProfile;
+
+use crate::blurb::readme::BlurbReadme;
 
 pub struct Github {
     rest_api: Arc<RestApi>,
@@ -90,6 +93,7 @@ impl Source for Github {
             GithubUserProfile::new(&self.rest_api).to_plugin(),
             GithubProjectsRepos::new(&self.rest_api).to_plugin(),
             RepoTags::new(&self.rest_api).to_plugin(),
+            BlurbReadme::new(&self.rest_api).to_plugin(),
         ]
     }
 
